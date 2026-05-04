@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  reid-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    ports:
+      - "5555:5555"
+    networks:
+      - cctv-net
+
+  camera-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.camera
+      # Use Dockerfile.camera.gpu and uncomment deploy block for GPU inference
+    volumes:
+      - ./dataset:/app/dataset:ro
+    command: ["--camera_id", "cam_1", "--video_source", "/app/dataset/test/S06/c041/vdo.avi", "--zmq_endpoint", "tcp://reid-server:5555"]
+    depends_on:
+      - reid-server
+    networks:
+      - cctv-net
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  camera-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.camera
+    volumes:
+      - ./dataset:/app/dataset:ro
+    command: ["--camera_id", "cam_2", "--video_source", "/app/dataset/test/S06/c042/vdo.avi", "--zmq_endpoint", "tcp://reid-server:5555"]
+    depends_on:
+      - reid-server
+    networks:
+      - cctv-net
+
+networks:
+  cctv-net:
+    driver: bridge

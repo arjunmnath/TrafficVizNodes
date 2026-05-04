@@ -1,0 +1,17 @@
+FROM python:3.9-slim
+
+WORKDIR /app
+
+# Install uv
+RUN pip install --no-cache-dir uv
+
+# Copy the server and shared logic
+COPY pyproject.toml .
+COPY shared/ ./shared/
+COPY reid_server/ ./reid_server/
+
+# Install only the necessary dependencies for the server
+RUN uv pip install --system pydantic pyzmq numpy scipy
+
+ENV PYTHONPATH=/app
+ENTRYPOINT ["python", "-m", "reid_server.main"]

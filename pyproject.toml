@@ -1,0 +1,18 @@
+[project]
+name = "cctv"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "fastapi>=0.128.8",
+    "lapx>=0.9.4",
+    "opencv-python-headless>=4.13.0.92",
+    "pydantic>=2.13.3",
+    "pyzmq>=27.1.0",
+    "scipy>=1.13.1",
+    "torch>=2.8.0",
+    "torchvision>=0.23.0",
+    "ultralytics>=8.4.45",
+    "uvicorn>=0.39.0",
+]
