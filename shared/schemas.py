@@ -11,7 +11,34 @@ class TrackEvent(BaseModel):
     camera_id: str
     track_id: int
     timestamp: float
+    video_pos_ms: Optional[float] = None  # Position in source video (ms)
     bbox: List[float] = Field(min_length=4, max_length=4)
     class_label: str = Field(alias="class")  # "person" or "vehicle"
     embedding: List[float]
     attributes: Attributes
+
+
+class QueryRequest(BaseModel):
+    query: str
+    top_k: int = 5
+    camera_id: Optional[str] = None  # Optional filter
+
+
+class QueryResultItem(BaseModel):
+    rank: int
+    camera_id: str
+    timestamp: float
+    video_pos_ms: Optional[float] = None
+    timestamp_human: str
+    global_id: Optional[int] = None
+    class_label: str
+    color: str
+    type: Optional[str] = None
+    vlm_score: float
+    vlm_explanation: str
+    thumbnail_b64: Optional[str] = None
+
+
+class QueryResponse(BaseModel):
+    query: str
+    results: List[QueryResultItem]

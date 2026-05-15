@@ -17,6 +17,9 @@ class GlobalIdentity:
             
         self.attributes = attributes
         self.last_seen = timestamp
+    
+    def __repr__(self):
+        return f"GlobalIdentity(global_id={self.global_id}, cls_label={self.cls_label}, attributes={self.attributes}, last_seen={self.last_seen})"
 
 class GlobalRegistry:
     def __init__(self):
@@ -27,6 +30,7 @@ class GlobalRegistry:
         global_id = self._next_id
         self._next_id += 1
         self.identities[global_id] = GlobalIdentity(global_id, embedding, cls_label, attributes, timestamp)
+        print("GLOBAL REGISTRY: ", self.identities)
         return global_id
 
     def get_identities(self, cls_label: str = None) -> list:

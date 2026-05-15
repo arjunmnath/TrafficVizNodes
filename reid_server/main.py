@@ -3,6 +3,7 @@ from reid_server.global_registry import GlobalRegistry
 from reid_server.matcher import Matcher
 from reid_server.subscriber import ZMQSubscriber
 from reid_server.api import ReIDEventStreamer
+from reid_server.event_store import EventStore
 from shared.utils import setup_logger
 import sys
 
@@ -13,6 +14,14 @@ def run_reid_server(config: ServerConfig):
     registry = GlobalRegistry()
     matcher = Matcher(config, registry)
     subscriber = ZMQSubscriber(bind_address=config.zmq_bind)
+    
+    # Initialize ChromaDB event store
+    try:
+        event_store = EventStore(host=config.chroma_host, port=config.chroma_port)
+        logger.info("ChromaDB event store initialized")
+    except Exception as e:
+        logger.warning(f"ChromaDB unavailable, events will not be persisted: {e}")
+        event_store = None
     
     api_server = ReIDEventStreamer(port=config.api_port)
     api_server.start()
@@ -32,8 +41,21 @@ def run_reid_server(config: ServerConfig):
             if type_str is not None:
                 attr_str += f" type={type_str}"
                 
-            print(f"[GLOBAL_ID={global_id}] camera={event.camera_id} track={event.track_id} class={event.class_label} {attr_str} time={event.timestamp:.2f}")
+            # print(f"[GLOBAL_ID={global_id}] camera={event.camera_id} track={event.track_id} class={event.class_label} {attr_str} time={event.timestamp:.2f}")
             sys.stdout.flush()
+            
+            # Persist to ChromaDB for inference node RAG retrieval
+            if event_store is not None:
+                event_store.store_event(global_id, {
+                    "camera_id": event.camera_id,
+                    "track_id": event.track_id,
+                    "class_label": event.class_label,
+                    "color": color,
+                    "type": type_str,
+                    "timestamp": event.timestamp,
+                    "video_pos_ms": event.video_pos_ms,
+                    "bbox": event.bbox,
+                })
             
             # Broadcast to SSE API
             api_server.broadcast({
@@ -54,10 +76,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--zmq_bind", type=str, default="tcp://*:5555")
     parser.add_argument("--api_port", type=int, default=8000)
+    parser.add_argument("--chroma_host", type=str, default="chromadb")
+    parser.add_argument("--chroma_port", type=int, default=8000)
     args = parser.parse_args()
     
     config = ServerConfig(
         zmq_bind=args.zmq_bind,
-        api_port=args.api_port
+        api_port=args.api_port,
+        chroma_host=args.chroma_host,
+        chroma_port=args.chroma_port
     )
     run_reid_server(config)
+

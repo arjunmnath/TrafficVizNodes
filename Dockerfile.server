@@ -11,7 +11,7 @@ COPY shared/ ./shared/
 COPY reid_server/ ./reid_server/
 
 # Install only the necessary dependencies for the server
-RUN uv pip install --system pydantic pyzmq numpy scipy
+RUN uv pip install --system pydantic pyzmq numpy scipy chromadb fastapi uvicorn
 
 ENV PYTHONPATH=/app
 ENTRYPOINT ["python", "-m", "reid_server.main"]

@@ -1,12 +1,23 @@
 version: '3.8'
 
 services:
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - "8200:8000"
+    volumes:
+      - chroma-data:/chroma/chroma
+    networks:
+      - cctv-net
+
   reid-server:
     build:
       context: .
       dockerfile: Dockerfile.server
     ports:
       - "5555:5555"
+    depends_on:
+      - chromadb
     networks:
       - cctv-net
 
@@ -41,6 +52,35 @@ services:
       - reid-server
     networks:
       - cctv-net
+
+  inference-node:
+    build:
+      context: .
+      dockerfile: Dockerfile.inference
+    ports:
+      - "8100:8100"
+    volumes:
+      - ./dataset:/app/dataset:ro
+    command: >
+      --chroma_host chromadb
+      --chroma_port 8000
+      --api_port 8100
+      --video_sources '{"cam_1": "/app/dataset/test/S06/c041/vdo.avi", "cam_2": "/app/dataset/test/S06/c042/vdo.avi"}'
+    depends_on:
+      - chromadb
+      - reid-server
+    networks:
+      - cctv-net
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  chroma-data:
 
 networks:
   cctv-net:

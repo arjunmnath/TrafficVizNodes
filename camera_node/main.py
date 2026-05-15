@@ -37,6 +37,7 @@ def run_camera_node(config: CameraConfig):
     
     try:
         while True:
+            video_pos_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
             ret, frame = cap.read()
             if not ret:
                 # Loop video for continuous testing
@@ -85,6 +86,7 @@ def run_camera_node(config: CameraConfig):
                         camera_id=config.camera_id,
                         track_id=int(track_id),
                         timestamp=timestamp,
+                        video_pos_ms=video_pos_ms,
                         bbox=[float(x1), float(y1), float(x2), float(y2)],
                         class_label=class_label,
                         embedding=embedding,

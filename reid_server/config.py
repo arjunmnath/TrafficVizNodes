@@ -8,4 +8,5 @@ class ServerConfig(BaseModel):
     match_threshold: float = 0.70
     temporal_window_seconds: float = 300.0  # Time to keep identities active
     api_port: int = 8000
-
+    chroma_host: str = "chromadb"
+    chroma_port: int = 8000
