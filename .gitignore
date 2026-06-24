@@ -134,3 +134,4 @@ dmypy.json
 dataset/
 *.pt
 trained_models
+.idea
