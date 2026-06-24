@@ -28,7 +28,13 @@ services:
       # Use Dockerfile.camera.gpu and uncomment deploy block for GPU inference
     volumes:
       - ./dataset:/app/dataset:ro
-    command: ["--camera_id", "cam_1", "--video_source", "/app/dataset/test/S06/c041/vdo.avi", "--zmq_endpoint", "tcp://reid-server:5555"]
+      - ./agent-working/trained_models:/app/models:ro
+    command: >
+      --camera_id cam_1
+      --video_source /app/dataset/test/S06/c041/vdo.avi
+      --zmq_endpoint tcp://reid-server:5555
+      --reid_model_name resnet101_ibn_a
+      --reid_model_path /app/models/101a_384/v1/resnet101_ibn_a_2.pth
     depends_on:
       - reid-server
     networks:
@@ -47,7 +53,13 @@ services:
       dockerfile: Dockerfile.camera
     volumes:
       - ./dataset:/app/dataset:ro
-    command: ["--camera_id", "cam_2", "--video_source", "/app/dataset/test/S06/c042/vdo.avi", "--zmq_endpoint", "tcp://reid-server:5555"]
+      - ./agent-working/trained_models:/app/models:ro
+    command: >
+      --camera_id cam_2
+      --video_source /app/dataset/test/S06/c042/vdo.avi
+      --zmq_endpoint tcp://reid-server:5555
+      --reid_model_name resnet101_ibn_a
+      --reid_model_path /app/models/101a_384/v1/resnet101_ibn_a_2.pth
     depends_on:
       - reid-server
     networks:

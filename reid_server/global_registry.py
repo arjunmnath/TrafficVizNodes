@@ -30,7 +30,6 @@ class GlobalRegistry:
         global_id = self._next_id
         self._next_id += 1
         self.identities[global_id] = GlobalIdentity(global_id, embedding, cls_label, attributes, timestamp)
-        print("GLOBAL REGISTRY: ", self.identities)
         return global_id
 
     def get_identities(self, cls_label: str = None) -> list:

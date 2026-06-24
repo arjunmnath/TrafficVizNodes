@@ -15,7 +15,14 @@ def run_camera_node(config: CameraConfig):
     
     # Initialize models
     tracker = YOLOTracker(model_path=config.yolo_model, conf=config.confidence_threshold)
-    reid = ReIDFeatureExtractor()
+    reid = ReIDFeatureExtractor(
+        model_name=config.reid_model_name,
+        model_path=config.reid_model_path,
+        flip_augment=config.reid_flip_augment,
+    )
+    logger.info(f"ReID model: {config.reid_model_name} (dim={reid.embedding_dim}, flip={config.reid_flip_augment})")
+    logger.info(f"ReID weights: {config.reid_model_path or 'random (no checkpoint)'}")
+    
     attributes = AttributeExtractor()
     
     # Initialize network
@@ -119,12 +126,21 @@ if __name__ == "__main__":
     parser.add_argument("--video_source", type=str, default="0")
     parser.add_argument("--zmq_endpoint", type=str, default="tcp://127.0.0.1:5555")
     parser.add_argument("--api_port", type=int, default=8001)
+    parser.add_argument("--reid_model_name", type=str, default="resnet101_ibn_a",
+                        help="DMT backbone name (resnet101_ibn_a, resnext101_ibn_a, etc.)")
+    parser.add_argument("--reid_model_path", type=str, default="",
+                        help="Path to trained .pth checkpoint")
+    parser.add_argument("--reid_flip_augment", action="store_true",
+                        help="Enable horizontal flip TTA (2x inference cost)")
     args = parser.parse_args()
     
     config = CameraConfig(
         camera_id=args.camera_id,
         video_source=args.video_source,
         zmq_endpoint=args.zmq_endpoint,
-        api_port=args.api_port
+        api_port=args.api_port,
+        reid_model_name=args.reid_model_name,
+        reid_model_path=args.reid_model_path,
+        reid_flip_augment=args.reid_flip_augment,
     )
     run_camera_node(config)

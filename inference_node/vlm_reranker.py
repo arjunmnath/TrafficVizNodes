@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import torch
 import json
 import re
@@ -46,13 +48,45 @@ class VLMReranker:
         self.logger = setup_logger("VLMReranker")
         self.logger.info(f"Loading VLM: {model_name} ...")
 
-        dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
+        # Select data type and device mapping target
+        if device == "auto":
+            if torch.cuda.is_available():
+                device_map = "auto"
+                dtype = torch.bfloat16
+                target_device = None
+            elif torch.backends.mps.is_available():
+                device_map = None
+                dtype = torch.float16
+                target_device = "mps"
+            else:
+                device_map = None
+                dtype = torch.float32
+                target_device = "cpu"
+        elif device == "cuda":
+            device_map = "cuda"
+            dtype = torch.bfloat16
+            target_device = None
+        elif device == "mps":
+            device_map = None
+            dtype = torch.float16
+            target_device = "mps"
+        else: # "cpu" or explicit device
+            device_map = None
+            dtype = torch.float32
+            target_device = device
 
-        self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-            model_name,
-            torch_dtype=dtype,
-            device_map=device,
-        )
+        if device_map:
+            self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                model_name,
+                torch_dtype=dtype,
+                device_map=device_map,
+            )
+        else:
+            self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                model_name,
+                torch_dtype=dtype,
+            ).to(target_device)
+
         self.processor = AutoProcessor.from_pretrained(model_name)
         self.logger.info("VLM loaded successfully")
 

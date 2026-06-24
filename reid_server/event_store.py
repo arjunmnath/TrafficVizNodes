@@ -1,4 +1,9 @@
-import chromadb
+try:
+    import chromadb
+    HAS_CHROMADB = True
+except ImportError:
+    HAS_CHROMADB = False
+
 from shared.utils import setup_logger
 
 
@@ -6,6 +11,8 @@ class EventStore:
     """Persists matched track events to ChromaDB for RAG-based retrieval."""
 
     def __init__(self, host: str = "chromadb", port: int = 8000):
+        if not HAS_CHROMADB:
+            raise ImportError("chromadb is not installed. Run `pip install chromadb` to enable persistence.")
         self.logger = setup_logger("EventStore")
         self.client = chromadb.HttpClient(host=host, port=port)
         self.collection = self.client.get_or_create_collection(
