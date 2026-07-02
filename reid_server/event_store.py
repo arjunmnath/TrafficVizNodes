@@ -4,74 +4,74 @@ try:
 except ImportError:
     HAS_CHROMADB = False
 
+from typing import Optional
+
 from shared.utils import setup_logger
 
 
 class EventStore:
-    """Persists matched track events to ChromaDB for RAG-based retrieval."""
+    """Persists matched track events to ChromaDB using SigLIP2 image embeddings."""
 
-    def __init__(self, host: str = "chromadb", port: int = 8000):
+    def __init__(
+        self,
+        host: str = "chromadb",
+        port: int = 8000,
+        collection_name: str = "track_events",
+        indexer: Optional[object] = None,
+    ):
         if not HAS_CHROMADB:
-            raise ImportError("chromadb is not installed. Run `pip install chromadb` to enable persistence.")
+            raise ImportError(
+                "chromadb is not installed. Run `pip install chromadb` to enable persistence."
+            )
         self.logger = setup_logger("EventStore")
         self.client = chromadb.HttpClient(host=host, port=port)
         self.collection = self.client.get_or_create_collection(
-            name="track_events",
+            name=collection_name,
             metadata={"hnsw:space": "cosine"},
         )
+        self.indexer = indexer
         self.logger.info(f"Connected to ChromaDB at {host}:{port}")
 
-    def _build_description(self, event_data: dict) -> str:
-        """Build a natural language description from event metadata."""
-        cls = event_data.get("class_label", "object")
-        color = event_data.get("color", "unknown")
-        vtype = event_data.get("type")
-        camera = event_data.get("camera_id", "unknown")
-
-        desc = f"{cls} with {color} color"
-        if vtype:
-            desc += f" {vtype}"
-        desc += f" seen at camera {camera}"
-        return desc
-
-    def store_event(self, global_id: int, event_data: dict):
-        """Store a matched event in ChromaDB.
+    def store_event(self, event_data: dict):
+        """Store a track event using a SigLIP2 embedding of the cropped object image.
 
         Args:
-            global_id: The globally resolved identity ID.
-            event_data: Dict with camera_id, track_id, class_label,
-                        color, type, timestamp, video_pos_ms, bbox.
+            event_data: Dict with camera_id, track_id, camera_timestamp,
+                        video_pos_ms, bbox, and optional video_path.
         """
+        if self.indexer is None:
+            self.logger.warning("No indexer configured; skipping event persistence")
+            return
+
         event_id = (
             f"{event_data['camera_id']}_"
             f"{event_data['track_id']}_"
-            f"{event_data['timestamp']:.4f}"
+            f"{event_data['camera_timestamp']:.4f}"
         )
 
-        description = self._build_description(event_data)
+        embedding = self.indexer.embed_event(event_data)
+        if embedding is None:
+            self.logger.warning(f"Skipping event without embedding: {event_id}")
+            return
 
         metadata = {
             "camera_id": event_data.get("camera_id", ""),
-            "global_id": global_id,
-            "class_label": event_data.get("class_label", ""),
-            "color": event_data.get("color", "unknown"),
-            "timestamp": event_data.get("timestamp", 0.0),
+            "track_id": int(event_data.get("track_id", 0)),
+            "camera_timestamp": float(event_data.get("camera_timestamp", 0.0)),
         }
 
-        # ChromaDB metadata only supports str/int/float/bool
-        if event_data.get("type") is not None:
-            metadata["type"] = event_data["type"]
         if event_data.get("video_pos_ms") is not None:
-            metadata["video_pos_ms"] = event_data["video_pos_ms"]
+            metadata["video_pos_ms"] = float(event_data["video_pos_ms"])
         if event_data.get("bbox"):
-            # Store bbox as comma-separated string
-            metadata["bbox"] = ",".join(str(v) for v in event_data["bbox"])
+            metadata["bbox"] = ",".join(str(value) for value in event_data["bbox"])
+        if event_data.get("video_path"):
+            metadata["video_path"] = event_data["video_path"]
 
         try:
             self.collection.upsert(
                 ids=[event_id],
-                documents=[description],
+                embeddings=[embedding.tolist()],
                 metadatas=[metadata],
             )
-        except Exception as e:
-            self.logger.error(f"Failed to store event: {e}")
+        except Exception as exc:
+            self.logger.error(f"Failed to store event: {exc}")

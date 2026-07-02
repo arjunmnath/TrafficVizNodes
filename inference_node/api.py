@@ -1,15 +1,16 @@
+from __future__ import annotations
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
+
 from shared.schemas import QueryRequest, QueryResponse
 from shared.utils import setup_logger
 from inference_node.rag_pipeline import RAGPipeline
-from inference_node.vector_store import VectorStore
+from inference_node.retrieval.vector_store import VectorStore
 
 
 logger = setup_logger("InferenceAPI")
 
-# These are set by main.py before the app starts
 _pipeline: RAGPipeline | None = None
 _vector_store: VectorStore | None = None
 
@@ -21,8 +22,8 @@ def create_app(pipeline: RAGPipeline, vector_store: VectorStore) -> FastAPI:
 
     app = FastAPI(
         title="CCTV Inference Node",
-        description="Text-to-timestamp CCTV footage search using VLM + RAG",
-        version="1.0.0",
+        description="Text-to-timestamp CCTV footage search using semantic retrieval and visual reasoning",
+        version="2.0.0",
     )
 
     app.add_middleware(

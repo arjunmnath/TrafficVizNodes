@@ -16,6 +16,10 @@ services:
       dockerfile: Dockerfile.server
     ports:
       - "5555:5555"
+    volumes:
+      - ./dataset:/app/dataset:ro
+    command: >
+      --video_sources '{"cam_1": "/app/dataset/test/S06/c041/vdo.avi", "cam_2": "/app/dataset/test/S06/c042/vdo.avi"}'
     depends_on:
       - chromadb
     networks:
@@ -77,6 +81,10 @@ services:
       --chroma_host chromadb
       --chroma_port 8000
       --api_port 8100
+      --retrieval_model google/siglip2-base-patch16-224
+      --reasoning_model microsoft/Florence-2-base-ft
+      --retrieval_top_k 20
+      --rerank_top_k 5
       --video_sources '{"cam_1": "/app/dataset/test/S06/c041/vdo.avi", "cam_2": "/app/dataset/test/S06/c042/vdo.avi"}'
     depends_on:
       - chromadb

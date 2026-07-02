@@ -2,10 +2,8 @@ FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
 
 WORKDIR /app
 
-# Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-# System dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.11 \
     python3.11-venv \
@@ -15,22 +13,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/bin/python3.11 /usr/bin/python
 
-# Install uv
 RUN pip install --no-cache-dir uv
 
-# Copy source
 COPY pyproject.toml .
 COPY shared/ ./shared/
 COPY inference_node/ ./inference_node/
 
-# Install Python dependencies
 RUN uv pip install --system \
     torch \
     torchvision \
     transformers \
     accelerate \
     chromadb \
-    qwen-vl-utils \
     Pillow \
     opencv-python-headless \
     fastapi \

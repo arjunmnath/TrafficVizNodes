@@ -135,3 +135,6 @@ dataset/
 *.pt
 trained_models
 .idea
+
+
+*.noinclude.py
