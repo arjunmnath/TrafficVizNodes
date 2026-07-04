@@ -8,9 +8,9 @@ class InferenceConfig(BaseModel):
     chroma_collection: str = "track_events"
 
     retrieval_model: str = "google/siglip2-base-patch16-224"
-    reasoning_model: str = "microsoft/Florence-2-base-ft"
+    reasoning_model: str = "microsoft/Florence-2-large"
     vlm_model: str = Field(
-        default="microsoft/Florence-2-base-ft",
+        default="microsoft/Florence-2-large",
         description="Deprecated alias for reasoning_model; kept for CLI compatibility.",
     )
 
@@ -29,7 +29,7 @@ class InferenceConfig(BaseModel):
 
     @model_validator(mode="after")
     def resolve_aliases(self) -> "InferenceConfig":
-        if self.vlm_model != "microsoft/Florence-2-base-ft":
+        if self.vlm_model != "microsoft/Florence-2-large":
             self.reasoning_model = self.vlm_model
         if self.top_k != 20 and self.retrieval_top_k == 20:
             self.retrieval_top_k = self.top_k

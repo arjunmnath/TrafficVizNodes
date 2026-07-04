@@ -8,16 +8,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv
-RUN pip install --no-cache-dir uv
+# Install poetry
+RUN pip install --no-cache-dir poetry && \
+    poetry config virtualenvs.create false
 
 # Copy the camera node and shared logic
-COPY pyproject.toml .
+COPY pyproject.toml poetry.lock* ./
 COPY shared/ ./shared/
 COPY camera_node/ ./camera_node/
 
 # Install dependencies
-RUN uv pip install --system .
+RUN poetry install --no-interaction --no-ansi --no-root
 
 ENV PYTHONPATH=/app
 ENTRYPOINT ["python", "-m", "camera_node.main"]

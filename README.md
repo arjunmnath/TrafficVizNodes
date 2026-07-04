@@ -93,7 +93,7 @@ score = 0.6 × cosine_sim(embedding) + 0.2 × attribute_match + 0.2 × temporal_
 
 ## Prerequisites
 
-- **Python 3.9+** and [uv](https://docs.astral.sh/uv/) package manager
+- **Python 3.10+** and [Poetry](https://python-poetry.org/) package manager
 - **Node.js 18+** and npm (for the dashboard)
 - A webcam or video file(s) to use as camera feeds
 
@@ -104,7 +104,7 @@ score = 0.6 × cosine_sim(embedding) + 0.2 × attribute_match + 0.2 × temporal_
 ```bash
 git clone https://github.com/arjunmnath/cctv.git
 cd cctv
-uv sync
+poetry install
 ```
 
 ### 2. Install dashboard dependencies
@@ -121,7 +121,7 @@ You can use any video files as simulated camera feeds. Each video acts as one ca
 
 ```bash
 # Two cameras from local video files
-uv run python run_all.py \
+poetry run python run_all.py \
   --videos path/to/video1.mp4 path/to/video2.mp4
 ```
 
@@ -131,7 +131,7 @@ Pass the device index (e.g., `0` for default webcam) as a video source:
 
 ```bash
 # Single webcam
-uv run python run_all.py --videos 0
+poetry run python run_all.py --videos 0
 ```
 
 ### 5. Start the dashboard

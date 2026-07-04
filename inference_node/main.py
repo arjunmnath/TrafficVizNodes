@@ -76,12 +76,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--reasoning_model",
         type=str,
-        default="microsoft/Florence-2-base-ft",
+        default="microsoft/Florence-2-large",
     )
     parser.add_argument(
         "--vlm_model",
         type=str,
-        default="microsoft/Florence-2-base-ft",
+        default="microsoft/Florence-2-large",
         help="Deprecated alias for --reasoning_model",
     )
     parser.add_argument("--api_port", type=int, default=8100)
@@ -103,7 +103,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     reasoning_model = args.reasoning_model
-    if args.vlm_model != "microsoft/Florence-2-base-ft":
+    if args.vlm_model != "microsoft/Florence-2-large":
         reasoning_model = args.vlm_model
 
     retrieval_top_k = args.retrieval_top_k

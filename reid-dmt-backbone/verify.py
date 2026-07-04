@@ -82,6 +82,9 @@ def extract_reid_crops(
     with open(json_path, "r") as f:
         data = json.load(f)
 
+    if isinstance(data, list):
+        data = {str(item["global_id"]): item.get("occurrences", []) for item in data}
+
     data = should_keep_detections(
         data,
         min_time_gap_seconds=min_time_gap_seconds,
@@ -160,12 +163,14 @@ def extract_reid_crops(
             stem = Path(video_name).stem
 
             timestamp = det.get("timestamp_seconds", 0.0)
+            similarity = det.get("similarity", 1.0)
 
             out_name = (
                 f"{stem}"
                 f"_f{frame_idx:06d}"
                 f"_t{local_track_id}"
-                f"_s{timestamp:.2f}.jpg"
+                f"_s{timestamp:.2f}"
+                f"_sim{similarity:.4f}.jpg"
             )
 
             cv2.imwrite(
@@ -178,8 +183,8 @@ def extract_reid_crops(
 
 if __name__ == "__main__":
     extract_reid_crops(
-        json_path="cleaned_reid.json",
+        json_path="reid_test_results.json",
         video_dir="input_vids",
         output_dir="reid_crops_cleaned",
-        min_time_gap_seconds=3.0,
+        min_time_gap_seconds=2.0,
     )

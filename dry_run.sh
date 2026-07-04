@@ -14,7 +14,7 @@ REID_MODEL_PATH="${REID_MODEL_PATH:-agent-working/trained_models/101a_384/v1/res
 echo "[1/2] Starting Backend Services (Tracker + ReID Server)..."
 echo "  ReID Model: ${REID_MODEL_NAME}"
 echo "  Weights:    ${REID_MODEL_PATH}"
-uv run python run_all.py \
+poetry run python run_all.py \
     --videos dataset/test/S06/c041/vdo.avi dataset/test/S06/c042/vdo.avi \
     --reid_model_name "${REID_MODEL_NAME}" \
     --reid_model_path "${REID_MODEL_PATH}" &

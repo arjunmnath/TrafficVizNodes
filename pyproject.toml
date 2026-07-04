@@ -3,7 +3,7 @@ name = "cctv"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10,<3.14"
 dependencies = [
     "chromadb>=1.0.0",
     "efficientnet-pytorch>=0.7.1",
@@ -24,3 +24,8 @@ dependencies = [
     "uvicorn>=0.39.0",
     "yacs>=0.1.8",
 ]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
