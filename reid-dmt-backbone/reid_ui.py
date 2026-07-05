@@ -9,6 +9,8 @@ import os
 import sys
 import re
 import time
+import psutil
+import torch
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -223,22 +225,31 @@ class RichUIListener(ReIDPipelineListener):
         summary_table.add_column("Global ID", style="bold yellow", justify="center")
         summary_table.add_column("Class Label", style="cyan")
         summary_table.add_column("Total Occurrences", justify="center", style="bold green")
+        summary_table.add_column("Distinct Local Tracks", style="white")
         summary_table.add_column("Video Sources Occurrences", style="white")
 
         for item in summary:
             g_id = item["global_id"]
             occs = item["occurrences"]
 
-            # Count occurrences per video source
+            # Count occurrences and gather local track IDs per video source
             vid_counts = {}
+            vid_tracks = {}
             for o in occs:
-                vid_counts[o["video"]] = vid_counts.get(o["video"], 0) + 1
+                v = o["video"]
+                vid_counts[v] = vid_counts.get(v, 0) + 1
+                if v not in vid_tracks:
+                    vid_tracks[v] = set()
+                vid_tracks[v].add(o.get("local_track_id", -1))
 
             source_info = ", ".join(
                 [f"[bold cyan]{v}[/bold cyan]: {c} frames" for v, c in vid_counts.items()]
             )
+            track_info = ", ".join(
+                [f"[bold cyan]{v}[/bold cyan]: {sorted(list(t))}" for v, t in vid_tracks.items()]
+            )
             cls = occs[0]["class_label"] if occs else "unknown"
-            summary_table.add_row(f"{g_id:03d}", cls, str(len(occs)), source_info)
+            summary_table.add_row(f"{g_id:03d}", cls, str(len(occs)), track_info, source_info)
 
         console.print(summary_table)
 
@@ -257,7 +268,24 @@ class RichUIListener(ReIDPipelineListener):
         layout.split_column(
             Layout(name="header", size=3),
             Layout(name="body", ratio=1),
-            Layout(name="footer", size=8),
+        )
+
+        # Body split: Left side and Right side
+        layout["body"].split_row(
+            Layout(name="left", ratio=1),
+            Layout(name="right", ratio=1),
+        )
+
+        # Split Left side into top and bottom halves
+        layout["left"].split_column(
+            Layout(name="left_top", ratio=1),
+            Layout(name="left_bottom", ratio=1),
+        )
+
+        # Split Left Top side into left (System Metrics) and right (Memory Usage)
+        layout["left_top"].split_row(
+            Layout(name="metrics", ratio=1),
+            Layout(name="memory", ratio=1),
         )
 
         # Header Panel
@@ -267,9 +295,6 @@ class RichUIListener(ReIDPipelineListener):
             (f"Active Video {video_idx}/{num_videos}: {video_name}", "cyan"),
         )
         layout["header"].update(Panel(header_text, border_style="magenta", box=box.ROUNDED))
-
-        # Body split
-        layout["body"].split_row(Layout(name="left", ratio=1), Layout(name="right", ratio=1))
 
         # Left: Progress & Metrics
         metrics_lines = []
@@ -292,16 +317,108 @@ class RichUIListener(ReIDPipelineListener):
 
         # Simple progress bar
         if total_frames > 0:
-            bar_width = 30
+            bar_width = 20
             filled = int(bar_width * (frame_count / total_frames))
             bar = "█" * filled + "░" * (bar_width - filled)
             metrics_lines.append(f"\n    Progress: [[magenta]{bar}[/magenta]]")
 
         metrics_text = Text.from_markup("\n".join(metrics_lines))
-        layout["left"].update(
+        layout["metrics"].update(
             Panel(
                 metrics_text,
                 title="[bold cyan]System Metrics[/bold cyan]",
+                border_style="cyan",
+                box=box.ROUNDED,
+            )
+        )
+
+        # Hardware & Memory panel: gather stats using psutil and torch
+        try:
+            # 1. CPU Core count & Usage
+            process = psutil.Process(os.getpid())
+            process_cpu = process.cpu_percent(interval=None)
+            sys_cpu = psutil.cpu_percent(interval=None)
+            sys_cores = psutil.cpu_count(logical=True)
+
+            # 2. Process & System Memory
+            process_mem = process.memory_info()
+            rss_mb = process_mem.rss / (1024 * 1024)
+            vms_mb = process_mem.vms / (1024 * 1024)
+
+            rss_val, rss_unit = (rss_mb / 1024, "GB") if rss_mb >= 1024 else (rss_mb, "MB")
+            vms_val, vms_unit = (vms_mb / 1024, "GB") if vms_mb >= 1024 else (vms_mb, "MB")
+
+            sys_mem = psutil.virtual_memory()
+            sys_total_gb = sys_mem.total / (1024 * 1024 * 1024)
+            sys_used_gb = sys_mem.used / (1024 * 1024 * 1024)
+            sys_pct = sys_mem.percent
+
+            memory_lines = []
+            memory_lines.append("\n  [bold yellow]CPU & System Usage:[/bold yellow]")
+            memory_lines.append(f"    System CPU:     [white]{sys_cpu:.1f}%[/white] ({sys_cores} cores)")
+            memory_lines.append(f"    Process CPU:    [white]{process_cpu:.1f}%[/white]")
+            memory_lines.append(f"    System RAM:     [white]{sys_used_gb:.1f}/{sys_total_gb:.1f} GB[/white] ([cyan]{sys_pct:.1f}%[/cyan])")
+
+            # Simple progress bar for system RAM load
+            sys_bar_width = 20
+            sys_filled = int(sys_bar_width * (sys_pct / 100))
+            sys_bar = "█" * sys_filled + "░" * (sys_bar_width - sys_filled)
+            memory_lines.append(f"    RAM Load:       [[magenta]{sys_bar}[/magenta]]")
+
+            memory_lines.append("\n  [bold yellow]Process Memory Usage:[/bold yellow]")
+            memory_lines.append(f"    RSS (Resident): [white]{rss_val:.1f} {rss_unit}[/white]")
+            memory_lines.append(f"    VMS (Virtual):  [white]{vms_val:.1f} {vms_unit}[/white]")
+
+            # 3. GPU Memory Usage (CUDA or MPS)
+            gpu_active = False
+
+            # Check CUDA
+            if torch.cuda.is_available():
+                gpu_active = True
+                memory_lines.append("\n  [bold yellow]CUDA GPU Usage:[/bold yellow]")
+                device_idx = torch.cuda.current_device()
+                device_name = torch.cuda.get_device_name(device_idx)
+                if len(device_name) > 22:
+                    device_name = device_name[:20] + ".."
+                memory_lines.append(f"    Device:         [white]{device_name}[/white]")
+
+                cuda_allocated = torch.cuda.memory_allocated(device_idx) / (1024 * 1024)
+                cuda_reserved = torch.cuda.memory_reserved(device_idx) / (1024 * 1024)
+
+                alloc_val, alloc_unit = (cuda_allocated / 1024, "GB") if cuda_allocated >= 1024 else (cuda_allocated, "MB")
+                res_val, res_unit = (cuda_reserved / 1024, "GB") if cuda_reserved >= 1024 else (cuda_reserved, "MB")
+
+                memory_lines.append(f"    Allocated:      [white]{alloc_val:.1f} {alloc_unit}[/white]")
+                memory_lines.append(f"    Reserved:       [white]{res_val:.1f} {res_unit}[/white]")
+
+            # Check MPS
+            elif hasattr(torch, "mps") and torch.backends.mps.is_available():
+                gpu_active = True
+                memory_lines.append("\n  [bold yellow]MPS GPU Usage (Apple Silicon):[/bold yellow]")
+                try:
+                    mps_allocated = torch.mps.current_allocated_memory() / (1024 * 1024)
+                    mps_driver = torch.mps.driver_allocated_memory() / (1024 * 1024)
+
+                    alloc_val, alloc_unit = (mps_allocated / 1024, "GB") if mps_allocated >= 1024 else (mps_allocated, "MB")
+                    driver_val, driver_unit = (mps_driver / 1024, "GB") if mps_driver >= 1024 else (mps_driver, "MB")
+
+                    memory_lines.append(f"    Allocated:      [white]{alloc_val:.1f} {alloc_unit}[/white]")
+                    memory_lines.append(f"    Driver Alloc:   [white]{driver_val:.1f} {driver_unit}[/white]")
+                except Exception as ex:
+                    memory_lines.append(f"    Error:          [red]{ex}[/red]")
+
+            if not gpu_active:
+                memory_lines.append("\n  [bold yellow]GPU Usage:[/bold yellow]")
+                memory_lines.append("    No active GPU (CUDA/MPS) detected.")
+
+        except Exception as e:
+            memory_lines = [f"\n  Error reading hardware stats: {e}"]
+
+        memory_text = Text.from_markup("\n".join(memory_lines))
+        layout["memory"].update(
+            Panel(
+                memory_text,
+                title="[bold cyan]Hardware & Memory[/bold cyan]",
                 border_style="cyan",
                 box=box.ROUNDED,
             )
@@ -317,9 +434,11 @@ class RichUIListener(ReIDPipelineListener):
             table.add_column(v_header, justify="right")
         table.add_column("Total", justify="right", style="bold magenta")
 
-        # Display Registry with scrolling
+        # Display Registry with scrolling (Heights computed dynamically)
         sorted_ids = sorted(registry.identities.items(), key=lambda x: x[0])
-        reg_height = 32
+        term_height = console.height
+        body_height = max(10, term_height - 3)
+        reg_height = max(5, body_height - 6)
 
         if not self.registry_scrolled_manually:
             self.registry_offset = max(0, len(sorted_ids) - reg_height)
@@ -344,8 +463,9 @@ class RichUIListener(ReIDPipelineListener):
 
         layout["right"].update(Panel(table, title=reg_title, border_style="green", box=box.ROUNDED))
 
-        # Footer Panel: scrolling log with viewport
-        log_height = 5
+        # Recent Matching Events (Left Bottom half, heights computed dynamically)
+        left_bottom_height = body_height // 2
+        log_height = max(3, left_bottom_height - 4)
 
         if not self.logs_scrolled_manually:
             self.logs_offset = max(0, len(self.recent_logs) - log_height)
@@ -363,7 +483,7 @@ class RichUIListener(ReIDPipelineListener):
         if len(self.recent_logs) > log_height:
             logs_title += f" [dim](↑/↓: Scroll, r: Reset | Showing {self.logs_offset + 1}-{self.logs_offset + len(visible_logs)}/{len(self.recent_logs)})[/dim]"
 
-        layout["footer"].update(
+        layout["left_bottom"].update(
             Panel(log_text, title=logs_title, border_style="blue", box=box.ROUNDED)
         )
 
