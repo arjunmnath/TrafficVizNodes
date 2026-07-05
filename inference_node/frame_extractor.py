@@ -47,9 +47,7 @@ class FrameExtractor:
         cap.release()
 
         if not ret or frame is None:
-            self.logger.warning(
-                f"Failed to read frame at {video_pos_ms:.0f}ms from {path}"
-            )
+            self.logger.warning(f"Failed to read frame at {video_pos_ms:.0f}ms from {path}")
             return None, None
 
         # Convert BGR -> RGB for PIL

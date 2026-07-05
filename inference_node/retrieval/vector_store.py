@@ -16,9 +16,9 @@ class VectorStore:
     def __init__(self, collection_name: str) -> None:
         self.logger = setup_logger("VectorStore")
         self.client = chromadb.CloudClient(
-          api_key='ck-5oQZAaS8PWuQXdP2rMZHW4nroQHAhqR3PWnzky7bEQhX',
-          tenant='a1cf0a6e-4cc2-453c-aa3b-3c2acb6a2dc5',
-          database='testing'
+            api_key="ck-5oQZAaS8PWuQXdP2rMZHW4nroQHAhqR3PWnzky7bEQhX",
+            tenant="a1cf0a6e-4cc2-453c-aa3b-3c2acb6a2dc5",
+            database="testing",
         )
         self.collection = self.client.get_or_create_collection(
             name=collection_name,

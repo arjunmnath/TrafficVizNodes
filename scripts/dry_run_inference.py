@@ -29,14 +29,14 @@ from shared.utils import setup_logger, compute_cosine_similarity
 logger = setup_logger("DryRunInference")
 
 # ANSI colors for beautiful terminal output
-_BOLD    = "\033[1m"
-_CYAN    = "\033[96m"
-_GREEN   = "\033[92m"
-_YELLOW  = "\033[93m"
-_RED     = "\033[91m"
+_BOLD = "\033[1m"
+_CYAN = "\033[96m"
+_GREEN = "\033[92m"
+_YELLOW = "\033[93m"
+_RED = "\033[91m"
 _MAGENTA = "\033[95m"
-_DIM     = "\033[2m"
-_RESET   = "\033[0m"
+_DIM = "\033[2m"
+_RESET = "\033[0m"
 
 # Filename pattern expected inside each global-ID subdirectory:
 #   clip1_f000001_t1_s0.04_sim1.0000.jpg (or clip1_f000001_t1_s0.04.jpg)
@@ -221,7 +221,9 @@ def run_search_pipeline(
     # Apply parsed metadata filters
     if parsed_query.metadata_filters:
         filtered_scored = filter_candidates(scored_candidates, parsed_query.metadata_filters)
-        print(f"⚙️  {_BOLD}Applied filters:{_RESET} {len(scored_candidates)} -> {_GREEN}{len(filtered_scored)}{_RESET} candidates remaining.")
+        print(
+            f"⚙️  {_BOLD}Applied filters:{_RESET} {len(scored_candidates)} -> {_GREEN}{len(filtered_scored)}{_RESET} candidates remaining."
+        )
         scored_candidates = filtered_scored
 
     # Sort and take top retrieval_k
@@ -274,7 +276,9 @@ def run_search_pipeline(
             logger.error(f"Failed to load image candidate {c['filepath']}: {e}")
 
     if not reasoning_candidates:
-        print(f"❌ {_RED}Failed to prepare any candidate images for {reasoner.__class__.__name__}.{_RESET}")
+        print(
+            f"❌ {_RED}Failed to prepare any candidate images for {reasoner.__class__.__name__}.{_RESET}"
+        )
         return
 
     # Run VQA Reranking
@@ -293,8 +297,12 @@ def run_search_pipeline(
         for idx, res in enumerate(ranked_results, start=1):
             color = _GREEN if res.vlm_score > 0 else _YELLOW
             status = "VERIFIED" if res.vlm_score > 0 else "REJECTED"
-            score_bar = "★" * int(res.vlm_score) + "☆" * (5 - int(res.vlm_score)) if 0 <= res.vlm_score <= 5 else f"Score: {res.vlm_score}"
-            
+            score_bar = (
+                "★" * int(res.vlm_score) + "☆" * (5 - int(res.vlm_score))
+                if 0 <= res.vlm_score <= 5
+                else f"Score: {res.vlm_score}"
+            )
+
             print(
                 f"  {_BOLD}#{idx:<2}{_RESET} "
                 f"[{color}{status:<8}{_RESET}]  "
@@ -305,7 +313,6 @@ def run_search_pipeline(
             )
             print(f"       {_DIM}Reasoning: {res.vlm_explanation}{_RESET}\n")
     print(f"{_GREEN}╪{'═' * 70}╪{_RESET}\n")
-
 
 
 def main():
@@ -319,7 +326,9 @@ def main():
     metadata_lookup = load_reid_metadata(args.reid_json)
 
     # 1. Initialize retrieval encoder
-    print(f"🔧 {_BOLD}Initializing retrieval encoder:{_RESET} {_CYAN}{args.retrieval_model}{_RESET} on {_MAGENTA}{args.device}{_RESET}...")
+    print(
+        f"🔧 {_BOLD}Initializing retrieval encoder:{_RESET} {_CYAN}{args.retrieval_model}{_RESET} on {_MAGENTA}{args.device}{_RESET}..."
+    )
     encoder = get_retrieval_encoder(model_name=args.retrieval_model, device=args.device)
 
     # 2. Collect crop files
@@ -330,7 +339,9 @@ def main():
 
     print(f"🔍 {_BOLD}Scanning crops directory:{_RESET} {crops_dir}...")
     crop_files = collect_crop_files(crops_dir)
-    print(f"📊 {_BOLD}Found:{_RESET} {_GREEN}{len(crop_files)}{_RESET} crop images under the directory.")
+    print(
+        f"📊 {_BOLD}Found:{_RESET} {_GREEN}{len(crop_files)}{_RESET} crop images under the directory."
+    )
 
     if not crop_files:
         logger.error("No valid crops found. Exiting.")
@@ -373,16 +384,16 @@ def main():
             logger.error(f"Failed to encode {filepath}: {e}")
             continue
 
-        candidates_db.append({
-            "filepath": filepath,
-            "embedding": embedding,
-            "metadata": metadata
-        })
+        candidates_db.append({"filepath": filepath, "embedding": embedding, "metadata": metadata})
 
-    print(f"\n✅ {_BOLD}{_GREEN}Successfully encoded {len(candidates_db)} crops into memory.{_RESET}")
+    print(
+        f"\n✅ {_BOLD}{_GREEN}Successfully encoded {len(candidates_db)} crops into memory.{_RESET}"
+    )
 
     # 4. Initialize VQA Reasoner
-    print(f"🤖 {_BOLD}Initializing VQA Reasoner:{_RESET} {_MAGENTA}{args.reasoning_model}{_RESET}...")
+    print(
+        f"🤖 {_BOLD}Initializing VQA Reasoner:{_RESET} {_MAGENTA}{args.reasoning_model}{_RESET}..."
+    )
     reasoner = get_vqa_reasoner(model_name=args.reasoning_model, device=args.device)
 
     # 5. Handle Query input
@@ -399,7 +410,9 @@ def main():
     else:
         # Interactive mode
         print(f"\n{_BOLD}{_GREEN}✨ In-Memory Inference Pipeline Ready{_RESET}")
-        print(f"{_DIM}Type your search query and press Enter. Type 'exit' or 'quit' to close.{_RESET}")
+        print(
+            f"{_DIM}Type your search query and press Enter. Type 'exit' or 'quit' to close.{_RESET}"
+        )
         while True:
             try:
                 query_str = input(f"\n{_BOLD}Query > {_RESET}").strip()

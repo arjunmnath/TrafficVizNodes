@@ -56,9 +56,7 @@ class RetrievalEngine:
             where = self._build_chroma_where(parsed.metadata_filters)
             self.logger.info(f"Metadata filters: {parsed.metadata_filters}")
 
-        self.logger.info(
-            f"Retrieval: semantic='{parsed.semantic_text}' top_k={top_k}"
-        )
+        self.logger.info(f"Retrieval: semantic='{parsed.semantic_text}' top_k={top_k}")
         query_embedding = self.encoder.encode_text(parsed.semantic_text)
         raw_results = self.vector_store.search(
             query_embedding=query_embedding,
@@ -78,13 +76,9 @@ class RetrievalEngine:
             clauses.append({"camera_id": filters["camera_id"]})
 
         if "camera_timestamp_gte" in filters:
-            clauses.append(
-                {"camera_timestamp": {"$gte": float(filters["camera_timestamp_gte"])}}
-            )
+            clauses.append({"camera_timestamp": {"$gte": float(filters["camera_timestamp_gte"])}})
         if "camera_timestamp_lt" in filters:
-            clauses.append(
-                {"camera_timestamp": {"$lt": float(filters["camera_timestamp_lt"])}}
-            )
+            clauses.append({"camera_timestamp": {"$lt": float(filters["camera_timestamp_lt"])}})
 
         if not clauses:
             return {}

@@ -3,6 +3,7 @@ import glob
 from typing import List, Union
 from .config import InferenceConfig
 
+
 def discover_checkpoints(model_dir: str) -> List[str]:
     """Recursively discover all .pth checkpoints under model_dir."""
     if not os.path.isdir(model_dir):
@@ -13,10 +14,13 @@ def discover_checkpoints(model_dir: str) -> List[str]:
     # Sort them to have a deterministic order
     return sorted(checkpoints)
 
-def get_config_for_checkpoint(checkpoint_path: str, device: str = "cuda", fp16: bool = True) -> InferenceConfig:
+
+def get_config_for_checkpoint(
+    checkpoint_path: str, device: str = "cuda", fp16: bool = True
+) -> InferenceConfig:
     """Dynamically determine InferenceConfig based on the checkpoint path/directory naming."""
     path_lower = os.path.abspath(checkpoint_path).lower()
-    
+
     # Defaults matching the standard stage 2 configurations
     backbone = "resnet101_ibn_a"
     image_size = (384, 384)
@@ -25,7 +29,7 @@ def get_config_for_checkpoint(checkpoint_path: str, device: str = "cuda", fp16: 
     transformer_type = "None"
     stride_size = (32, 32)
     neck_feat = "after"
-    
+
     if "transreid" in path_lower or "transformer" in path_lower:
         backbone = "transformer"
         image_size = (256, 256)
@@ -47,7 +51,7 @@ def get_config_for_checkpoint(checkpoint_path: str, device: str = "cuda", fp16: 
         backbone = "resnet50_ibn_a"
     elif "resnet50" in path_lower:
         backbone = "resnet50"
-        
+
     return InferenceConfig(
         backbone=backbone,
         image_size=image_size,
@@ -58,18 +62,19 @@ def get_config_for_checkpoint(checkpoint_path: str, device: str = "cuda", fp16: 
         checkpoint_path=checkpoint_path,
         transformer_type=transformer_type,
         stride_size=stride_size,
-        neck_feat=neck_feat
+        neck_feat=neck_feat,
     )
+
 
 def resolve_checkpoints_and_configs(
     model_dir: str = "trained_models",
     model_paths: Union[str, List[str]] = None,
     device: str = "cuda",
-    fp16: bool = True
+    fp16: bool = True,
 ) -> List[InferenceConfig]:
     """Resolves and returns a list of InferenceConfigs for the selected/discovered checkpoints."""
     resolved_paths = []
-    
+
     if model_paths is not None:
         if isinstance(model_paths, str):
             resolved_paths = [model_paths]
@@ -78,12 +83,14 @@ def resolve_checkpoints_and_configs(
     else:
         resolved_paths = discover_checkpoints(model_dir)
         if not resolved_paths:
-            raise FileNotFoundError(f"No checkpoints (.pth) discovered under model directory: {model_dir}")
-            
+            raise FileNotFoundError(
+                f"No checkpoints (.pth) discovered under model directory: {model_dir}"
+            )
+
     configs = []
     for path in resolved_paths:
         if not os.path.exists(path):
             raise FileNotFoundError(f"Checkpoint not found at: {path}")
         configs.append(get_config_for_checkpoint(path, device=device, fp16=fp16))
-        
+
     return configs

@@ -8,38 +8,45 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-__all__ = ["Flatten",
-           "GeM",
-           "GeneralizedMeanPooling",
-           "GeneralizedMeanPoolingP",
-           "FastGlobalAvgPool2d",
-           "AdaptiveAvgMaxPool2d",
-           "ClipGlobalAvgPool2d",
-           ]
+__all__ = [
+    "Flatten",
+    "GeM",
+    "GeneralizedMeanPooling",
+    "GeneralizedMeanPoolingP",
+    "FastGlobalAvgPool2d",
+    "AdaptiveAvgMaxPool2d",
+    "ClipGlobalAvgPool2d",
+]
 
 from torch.nn import Parameter
 
 
 class GeM(nn.Module):
     def __init__(self, p=3.0, eps=1e-6, freeze_p=True):
-    # def __init__(self, p=2.35, eps=1e-6, freeze_p=True):
+        # def __init__(self, p=2.35, eps=1e-6, freeze_p=True):
         super(GeM, self).__init__()
         self.p = p if freeze_p else Parameter(torch.ones(1) * p)
         self.eps = eps
 
     def forward(self, x):
         # print(self.p)
-        return F.adaptive_avg_pool2d(x.clamp(min=self.eps).pow(self.p),
-                            (1, 1)).pow(1. / self.p)
+        return F.adaptive_avg_pool2d(x.clamp(min=self.eps).pow(self.p), (1, 1)).pow(1.0 / self.p)
 
     def __repr__(self):
         if isinstance(self.p, float):
             p = self.p
         else:
             p = self.p.data.tolist()[0]
-        return self.__class__.__name__ +\
-               '(' + 'p=' + '{:.4f}'.format(p) +\
-               ', ' + 'eps=' + str(self.eps) + ')'
+        return (
+            self.__class__.__name__
+            + "("
+            + "p="
+            + "{:.4f}".format(p)
+            + ", "
+            + "eps="
+            + str(self.eps)
+            + ")"
+        )
 
 
 class Flatten(nn.Module):
@@ -70,17 +77,22 @@ class GeneralizedMeanPooling(nn.Module):
 
     def forward(self, x):
         x = x.clamp(min=self.eps).pow(self.p)
-        return torch.nn.functional.adaptive_avg_pool2d(x, self.output_size).pow(1. / self.p)
+        return torch.nn.functional.adaptive_avg_pool2d(x, self.output_size).pow(1.0 / self.p)
 
     def __repr__(self):
-        return self.__class__.__name__ + '(' \
-               + str(self.p) + ', ' \
-               + 'output_size=' + str(self.output_size) + ')'
+        return (
+            self.__class__.__name__
+            + "("
+            + str(self.p)
+            + ", "
+            + "output_size="
+            + str(self.output_size)
+            + ")"
+        )
 
 
 class GeneralizedMeanPoolingP(GeneralizedMeanPooling):
-    """ Same, but norm is trainable
-    """
+    """Same, but norm is trainable"""
 
     def __init__(self, norm=3, output_size=1, eps=1e-6):
         super(GeneralizedMeanPoolingP, self).__init__(norm, output_size, eps)
@@ -120,5 +132,5 @@ class ClipGlobalAvgPool2d(nn.Module):
 
     def forward(self, x):
         x = self.avgpool(x)
-        x = torch.clamp(x, min=0., max=1.)
+        x = torch.clamp(x, min=0.0, max=1.0)
         return x

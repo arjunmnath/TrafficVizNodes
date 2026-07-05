@@ -101,7 +101,7 @@ def parse_args():
     parser.add_argument(
         "--retrieval_model",
         type=str,
-        default="openai/clip-vit-large-patch14", 
+        default="openai/clip-vit-large-patch14",
         help="Retrieval encoder model (e.g. google/siglip2-base-patch16-224, openclip-vit, openclip:ViT-B-32/laion2b_s34b_b79k)",
     )
     parser.add_argument(
@@ -183,14 +183,14 @@ def collect_crop_files(crops_dir: Path) -> list:
 
 
 # ANSI colours for terminal output
-_BOLD    = "\033[1m"
-_CYAN    = "\033[96m"
-_GREEN   = "\033[92m"
-_YELLOW  = "\033[93m"
-_RED     = "\033[91m"
+_BOLD = "\033[1m"
+_CYAN = "\033[96m"
+_GREEN = "\033[92m"
+_YELLOW = "\033[93m"
+_RED = "\033[91m"
 _MAGENTA = "\033[95m"
-_DIM     = "\033[2m"
-_RESET   = "\033[0m"
+_DIM = "\033[2m"
+_RESET = "\033[0m"
 
 
 def connect_collection(args):
@@ -216,9 +216,7 @@ def connect_collection(args):
         except Exception as e:
             logger.warning(f"Could not clear collection: {e}")
 
-    logger.info(
-        f"Target collection: '{args.collection}' (current count: {collection.count()})"
-    )
+    logger.info(f"Target collection: '{args.collection}' (current count: {collection.count()})")
     return collection
 
 
@@ -232,7 +230,9 @@ def main():
     collection = connect_collection(args)
     metadata_lookup = load_reid_metadata(args.reid_json)
 
-    print(f"🔧 {_BOLD}Initializing retrieval encoder:{_RESET} {_CYAN}{args.retrieval_model}{_RESET} on {_MAGENTA}{args.device}{_RESET}...")
+    print(
+        f"🔧 {_BOLD}Initializing retrieval encoder:{_RESET} {_CYAN}{args.retrieval_model}{_RESET} on {_MAGENTA}{args.device}{_RESET}..."
+    )
     encoder = get_retrieval_encoder(model_name=args.retrieval_model, device=args.device)
 
     crops_dir = Path(args.crops_dir)
@@ -242,7 +242,9 @@ def main():
 
     print(f"🔍 {_BOLD}Scanning crops directory:{_RESET} {crops_dir}...")
     crop_files = collect_crop_files(crops_dir)
-    print(f"📊 {_BOLD}Found:{_RESET} {_GREEN}{len(crop_files)}{_RESET} crop images across all global IDs.")
+    print(
+        f"📊 {_BOLD}Found:{_RESET} {_GREEN}{len(crop_files)}{_RESET} crop images across all global IDs."
+    )
 
     if args.limit:
         crop_files = crop_files[: args.limit]
@@ -259,8 +261,8 @@ def main():
         desc="🧬 Indexing",
         bar_format="{l_bar}{bar:30}{r_bar}{bar:-10b}",
     ):
-        clip_name = match.group(1)               # e.g. "clip1"
-        frame_idx = int(match.group(2))          # e.g. 1
+        clip_name = match.group(1)  # e.g. "clip1"
+        frame_idx = int(match.group(2))  # e.g. 1
         timestamp_seconds = float(match.group(4))  # e.g. 0.04
 
         camera_id = camera_id_from_clip(clip_name)
@@ -323,13 +325,23 @@ def main():
         except Exception as e:
             logger.error(f"Failed to upsert final batch: {e}")
 
-    print(f"\n{_BOLD}{_GREEN}┌────────────────────────────────────────────────────────────┐{_RESET}")
+    print(
+        f"\n{_BOLD}{_GREEN}┌────────────────────────────────────────────────────────────┐{_RESET}"
+    )
     print(f"{_BOLD}{_GREEN}│              PREPOPULATION COMPLETE 🎉                     │{_RESET}")
     print(f"{_BOLD}{_GREEN}├────────────────────────────────────────────────────────────┤{_RESET}")
-    print(f"{_BOLD}{_GREEN}│{_RESET}  Processed Crops : {_BOLD}{processed_count:<40}{_RESET}{_BOLD}{_GREEN}│{_RESET}")
-    print(f"{_BOLD}{_GREEN}│{_RESET}  Total DB Items  : {_BOLD}{collection.count():<40}{_RESET}{_BOLD}{_GREEN}│{_RESET}")
-    print(f"{_BOLD}{_GREEN}│{_RESET}  Collection Name : {_BOLD}{args.collection:<40}{_RESET}{_BOLD}{_GREEN}│{_RESET}")
-    print(f"{_BOLD}{_GREEN}└────────────────────────────────────────────────────────────┘{_RESET}\n")
+    print(
+        f"{_BOLD}{_GREEN}│{_RESET}  Processed Crops : {_BOLD}{processed_count:<40}{_RESET}{_BOLD}{_GREEN}│{_RESET}"
+    )
+    print(
+        f"{_BOLD}{_GREEN}│{_RESET}  Total DB Items  : {_BOLD}{collection.count():<40}{_RESET}{_BOLD}{_GREEN}│{_RESET}"
+    )
+    print(
+        f"{_BOLD}{_GREEN}│{_RESET}  Collection Name : {_BOLD}{args.collection:<40}{_RESET}{_BOLD}{_GREEN}│{_RESET}"
+    )
+    print(
+        f"{_BOLD}{_GREEN}└────────────────────────────────────────────────────────────┘{_RESET}\n"
+    )
 
 
 if __name__ == "__main__":

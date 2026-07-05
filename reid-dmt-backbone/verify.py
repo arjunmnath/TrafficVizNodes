@@ -24,7 +24,6 @@ def should_keep_detections(
     filtered: dict[str, list[dict]] = {}
 
     for global_id, detections in data.items():
-
         by_video: dict[str, list[dict]] = defaultdict(list)
 
         for det in detections:
@@ -33,7 +32,6 @@ def should_keep_detections(
         kept: list[dict] = []
 
         for video_name, video_dets in by_video.items():
-
             video_dets.sort(
                 key=lambda x: (
                     x.get("timestamp_seconds", 0.0),
@@ -44,20 +42,14 @@ def should_keep_detections(
             last_saved_time: float | None = None
 
             for det in video_dets:
-
-                current_time = float(
-                    det.get("timestamp_seconds", 0.0)
-                )
+                current_time = float(det.get("timestamp_seconds", 0.0))
 
                 if last_saved_time is None:
                     kept.append(det)
                     last_saved_time = current_time
                     continue
 
-                if (
-                    current_time - last_saved_time
-                    >= min_time_gap_seconds
-                ):
+                if current_time - last_saved_time >= min_time_gap_seconds:
                     kept.append(det)
                     last_saved_time = current_time
 
@@ -72,7 +64,6 @@ def extract_reid_crops(
     output_dir: str,
     min_time_gap_seconds: float = MIN_TIME_GAP_SECONDS,
 ) -> None:
-
     json_path = Path(json_path)
     video_dir = Path(video_dir)
     output_dir = Path(output_dir)
@@ -124,20 +115,15 @@ def extract_reid_crops(
         frame = None
 
         for det in detections:
-
             frame_idx = int(det["frame"])
 
             if frame_idx != current_frame_idx:
-
                 cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
 
                 success, frame = cap.read()
 
                 if not success:
-                    print(
-                        f"[WARNING] Failed reading frame "
-                        f"{frame_idx} from {video_name}"
-                    )
+                    print(f"[WARNING] Failed reading frame {frame_idx} from {video_name}")
                     continue
 
                 current_frame_idx = frame_idx

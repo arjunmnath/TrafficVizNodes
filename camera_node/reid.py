@@ -81,6 +81,7 @@ MODEL_REGISTRY = {
 
 # ---------- Initialization helpers (from DMT) ---------- #
 
+
 def _weights_init_kaiming(m):
     classname = m.__class__.__name__
     if classname.find("Linear") != -1:
@@ -97,6 +98,7 @@ def _weights_init_kaiming(m):
 
 
 # ---------- CNN ReID wrapper (mirrors DMT Backbone) ---------- #
+
 
 class _CNNReIDBackbone(nn.Module):
     """
@@ -152,6 +154,7 @@ class _CNNReIDBackbone(nn.Module):
 
 # ---------- Transformer ReID wrapper (mirrors DMT build_transformer) ---------- #
 
+
 class _TransformerReIDBackbone(nn.Module):
     """
     Wraps TransReID ViT-Base with BNNeck.
@@ -194,6 +197,7 @@ class _TransformerReIDBackbone(nn.Module):
 
 # ---------- Public API ---------- #
 
+
 class ReIDFeatureExtractor:
     """
     Vehicle ReID feature extractor using DMT trained models.
@@ -215,8 +219,7 @@ class ReIDFeatureExtractor:
     ):
         if model_name not in MODEL_REGISTRY:
             raise ValueError(
-                f"Unknown model '{model_name}'. "
-                f"Supported: {list(MODEL_REGISTRY.keys())}"
+                f"Unknown model '{model_name}'. Supported: {list(MODEL_REGISTRY.keys())}"
             )
 
         self.model_name = model_name
@@ -255,11 +258,13 @@ class ReIDFeatureExtractor:
         self.model = self.model.to(self.device).eval()
 
         # Preprocessing transform
-        self.transform = T.Compose([
-            T.Resize(self.input_size),
-            T.ToTensor(),
-            T.Normalize(mean=cfg["pixel_mean"], std=cfg["pixel_std"]),
-        ])
+        self.transform = T.Compose(
+            [
+                T.Resize(self.input_size),
+                T.ToTensor(),
+                T.Normalize(mean=cfg["pixel_mean"], std=cfg["pixel_std"]),
+            ]
+        )
 
     @property
     def embedding_dim(self) -> int:

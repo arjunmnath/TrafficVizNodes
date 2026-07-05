@@ -27,7 +27,7 @@ from reid_pipeline_base import (
     BaseReIDPipeline,
     get_device,
     is_valid_crop,
-    resolve_path
+    resolve_path,
 )
 
 # Re-expose base imports for backward compatibility with UI and testing runner
@@ -38,22 +38,33 @@ __all__ = [
     "get_device",
     "is_valid_crop",
     "resolve_path",
-    "ReIDPipeline"
+    "ReIDPipeline",
 ]
+
 
 class ReIDPipeline(BaseReIDPipeline):
     """Adapter for the legacy single-model ReID pipeline."""
-    def __init__(self, weights_path, yolo_path, threshold=0.8, device="cpu", max_frames=0, sample_fps=0.0, output_path="reid_test_results-v0.json"):
+
+    def __init__(
+        self,
+        weights_path,
+        yolo_path,
+        threshold=0.8,
+        device="cpu",
+        max_frames=0,
+        sample_fps=0.0,
+        output_path="reid_test_results-v0.json",
+    ):
         super().__init__(
             yolo_path=yolo_path,
             threshold=threshold,
             max_frames=max_frames,
             sample_fps=sample_fps,
-            output_path=output_path
+            output_path=output_path,
         )
         self.weights_path = weights_path
         self.device = device if device != "auto" else get_device()
-        
+
         self.model = None
         self.val_transforms = None
         self.inf_cfg = None
@@ -61,7 +72,7 @@ class ReIDPipeline(BaseReIDPipeline):
     def _initialize_extractor(self, listener: ReIDPipelineListener = None):
         if listener:
             listener.on_init_status("Loading configuration via InferenceConfig...")
-            
+
         # Dynamically build and load InferenceConfig from weights_path
         self.inf_cfg = get_config_for_checkpoint(self.weights_path, device=self.device, fp16=False)
         # Enable flip_feats to match the default legacy behavior
@@ -71,12 +82,14 @@ class ReIDPipeline(BaseReIDPipeline):
             listener.on_init_status("Building model backbone and loading weights...")
         self.model = build_model_from_config(self.inf_cfg)
 
-        # Define transformations matching 
-        self.val_transforms = T.Compose([
-            T.Resize(self.inf_cfg.image_size, interpolation=3),
-            T.ToTensor(),
-            T.Normalize(mean=self.inf_cfg.pixel_mean, std=self.inf_cfg.pixel_std)
-        ])
+        # Define transformations matching
+        self.val_transforms = T.Compose(
+            [
+                T.Resize(self.inf_cfg.image_size, interpolation=3),
+                T.ToTensor(),
+                T.Normalize(mean=self.inf_cfg.pixel_mean, std=self.inf_cfg.pixel_std),
+            ]
+        )
 
     def _extract_embedding(self, crop: np.ndarray) -> np.ndarray:
         # BGR -> RGB -> PIL
@@ -96,5 +109,5 @@ class ReIDPipeline(BaseReIDPipeline):
             feat = torch.nn.functional.normalize(feat, p=2, dim=1)
 
             embedding = feat.squeeze(0).cpu().numpy()
-            
+
         return embedding

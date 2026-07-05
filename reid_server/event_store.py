@@ -1,5 +1,6 @@
 try:
     import chromadb
+
     HAS_CHROMADB = True
 except ImportError:
     HAS_CHROMADB = False

@@ -105,7 +105,7 @@ if __name__ == "__main__":
         "--video_sources",
         type=str,
         default="{}",
-        help='JSON dict mapping camera_id to video path',
+        help="JSON dict mapping camera_id to video path",
     )
     args = parser.parse_args()
 

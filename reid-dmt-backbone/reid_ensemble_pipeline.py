@@ -17,8 +17,10 @@ if dmt_path not in sys.path:
 from inference import EnsembleReID
 from reid_pipeline_base import BaseReIDPipeline, ReIDPipelineListener, get_device
 
+
 class EnsembleReIDPipeline(BaseReIDPipeline):
     """Ensembled ReID Tracking Pipeline adapter using src/inference.EnsembleReID."""
+
     def __init__(
         self,
         model_dir="trained_models",
@@ -30,19 +32,21 @@ class EnsembleReIDPipeline(BaseReIDPipeline):
         sample_fps=0.0,
         output_path="reid_test_results.json",
         fp16=True,
-        fusion="concat"
+        fusion="concat",
     ):
         super().__init__(
             yolo_path=yolo_path,
             threshold=threshold,
             max_frames=max_frames,
             sample_fps=sample_fps,
-            output_path=output_path
+            output_path=output_path,
         )
         self.model_dir = model_dir
         self.model_paths = model_paths
         # Handle 'auto' device mapping
-        self.device = device if device != "auto" else ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = (
+            device if device != "auto" else ("cuda" if torch.cuda.is_available() else "cpu")
+        )
         self.fp16 = fp16
         self.fusion = fusion
         self.ensemble = None
@@ -50,27 +54,26 @@ class EnsembleReIDPipeline(BaseReIDPipeline):
     def _initialize_extractor(self, listener: ReIDPipelineListener = None):
         if listener:
             listener.on_init_status("Loading and assembling ensembled models...")
-        
+
         # Instantiate the EnsembleReID class from src/inference
         self.ensemble = EnsembleReID(
             model_dir=self.model_dir,
             model_paths=self.model_paths,
             device=self.device,
-            fp16=self.fp16
+            fp16=self.fp16,
         )
 
         if listener:
-            listener.on_init_status(f"Loaded {len(self.ensemble.models)} ensembled models successfully.")
+            listener.on_init_status(
+                f"Loaded {len(self.ensemble.models)} ensembled models successfully."
+            )
 
     def _extract_embedding(self, crop: np.ndarray) -> np.ndarray:
         """Extract ensembled/fused embedding using EnsembleReID.extract."""
         # EnsembleReID.extract expects OpenCV BGR array directly if is_bgr=True
         # It handles conversion to PIL, transformation, running through all models, and fusing.
         feat_tensor = self.ensemble.extract(
-            crop,
-            is_bgr=True,
-            return_dict=False,
-            fusion=self.fusion
+            crop, is_bgr=True, return_dict=False, fusion=self.fusion
         )
         # Convert PyTorch Tensor to NumPy array
         return feat_tensor.cpu().numpy()

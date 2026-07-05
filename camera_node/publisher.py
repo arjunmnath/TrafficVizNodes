@@ -2,6 +2,7 @@ import zmq
 from shared.schemas import TrackEvent
 from shared.utils import setup_logger
 
+
 class ZMQPublisher:
     def __init__(self, endpoint: str):
         self.logger = setup_logger("ZMQPublisher")

@@ -86,7 +86,9 @@ if __name__ == "__main__":
     )
     parser.add_argument("--api_port", type=int, default=8100)
     parser.add_argument("--retrieval_top_k", type=int, default=20)
-    parser.add_argument("--top_k", type=int, default=20, help="Deprecated alias for --retrieval_top_k")
+    parser.add_argument(
+        "--top_k", type=int, default=20, help="Deprecated alias for --retrieval_top_k"
+    )
     parser.add_argument("--rerank_top_k", type=int, default=5)
     parser.add_argument(
         "--metadata_filter_enabled",

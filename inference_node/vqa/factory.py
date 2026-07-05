@@ -19,9 +19,11 @@ def get_vqa_reasoner(model_name: str, device: str = "auto") -> BaseVQAReasoner:
     model_name_lower = model_name.lower()
     if "florence" in model_name_lower:
         from inference_node.vqa.florence import FlorenceReasoner
+
         return FlorenceReasoner(model_name=model_name, device=device)
     elif "qwen" in model_name_lower:
         from inference_node.vqa.qwen import QwenVLMReasoner
+
         return QwenVLMReasoner(model_name=model_name, device=device)
     else:
         raise ValueError(

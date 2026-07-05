@@ -23,12 +23,12 @@ from shared.utils import setup_logger
 logger = setup_logger("QueryDB")
 
 # ANSI colours for terminal output
-_BOLD   = "\033[1m"
-_CYAN   = "\033[96m"
-_GREEN  = "\033[92m"
+_BOLD = "\033[1m"
+_CYAN = "\033[96m"
+_GREEN = "\033[92m"
 _YELLOW = "\033[93m"
-_DIM    = "\033[2m"
-_RESET  = "\033[0m"
+_DIM = "\033[2m"
+_RESET = "\033[0m"
 
 FILENAME_REGEX = re.compile(
     r"^(clip\d+)_f(\d+)_t(\d+)_s([\d.]+)(?:_sim([\d.]+))?\.(jpg|jpeg|png)$", re.IGNORECASE
@@ -155,10 +155,7 @@ def print_results(query: str, parsed_query, results: list[RetrievalResult]) -> N
         bbox_str = f"  bbox={r.bbox}" if r.bbox else ""
         crop_path = find_crop_path(r.track_id, r.camera_id, r.camera_timestamp)
 
-        print(
-            f"\n  {_BOLD}#{rank:<3}{_RESET}"
-            f"  {_GREEN}ID:{_RESET} {r.id}"
-        )
+        print(f"\n  {_BOLD}#{rank:<3}{_RESET}  {_GREEN}ID:{_RESET} {r.id}")
         print(
             f"       {_GREEN}Camera:{_RESET} {r.camera_id:<10}"
             f"  {_GREEN}Track:{_RESET} {r.track_id:<6}"
@@ -232,16 +229,9 @@ def show_results_grid(results: list[RetrievalResult], query: str) -> None:
             title_font = ImageFont.load_default()
 
     # Draw header background
-    draw.rectangle(
-        [(0, 0), (cols * cell_w, header_h)],
-        fill=(20, 20, 20)
-    )
+    draw.rectangle([(0, 0), (cols * cell_w, header_h)], fill=(20, 20, 20))
     # Subtle separator line
-    draw.line(
-        [(0, header_h - 1), (cols * cell_w, header_h - 1)],
-        fill=(60, 60, 60),
-        width=1
-    )
+    draw.line([(0, header_h - 1), (cols * cell_w, header_h - 1)], fill=(60, 60, 60), width=1)
 
     # Draw the query text in the header
     display_query = f'Query: "{query}"'
@@ -301,8 +291,7 @@ def show_results_grid(results: list[RetrievalResult], query: str) -> None:
 
         # Bottom label strip
         draw.rectangle(
-            [(x_offset, y_offset + 200), (x_offset + cell_w, y_offset + cell_h)],
-            fill=(45, 45, 45)
+            [(x_offset, y_offset + 200), (x_offset + cell_w, y_offset + cell_h)], fill=(45, 45, 45)
         )
 
         rank = idx + 1
@@ -318,8 +307,18 @@ def show_results_grid(results: list[RetrievalResult], query: str) -> None:
             w1, _ = font.getsize(text_line1)
             w2, _ = font.getsize(text_line2)
 
-        draw.text((x_offset + (cell_w - w1) // 2, y_offset + 203), text_line1, fill=(255, 255, 255), font=font)
-        draw.text((x_offset + (cell_w - w2) // 2, y_offset + 220), text_line2, fill=(200, 200, 200), font=font)
+        draw.text(
+            (x_offset + (cell_w - w1) // 2, y_offset + 203),
+            text_line1,
+            fill=(255, 255, 255),
+            font=font,
+        )
+        draw.text(
+            (x_offset + (cell_w - w2) // 2, y_offset + 220),
+            text_line2,
+            fill=(200, 200, 200),
+            font=font,
+        )
 
     # Save to workspace root
     grid_path = workspace_root / "query_results_grid.png"
@@ -350,9 +349,7 @@ def main():
     logger.info(f"Connecting to ChromaDB collection '{args.collection}'...")
     vector_store = VectorStore(collection_name=args.collection)
 
-    logger.info(
-        f"Collection has {vector_store.get_event_count()} indexed embeddings."
-    )
+    logger.info(f"Collection has {vector_store.get_event_count()} indexed embeddings.")
 
     engine = RetrievalEngine(
         encoder=encoder,

@@ -7,16 +7,17 @@ import torchvision.transforms.functional as F_t
 from PIL import Image
 from typing import Union, List, Any
 
+
 def to_pil_image(img: Any, is_bgr: bool = True) -> Image.Image:
     """Converts various image formats (PIL, OpenCV, numpy, Tensor, path) into a standard RGB PIL Image."""
     if isinstance(img, Image.Image):
         return img.convert("RGB")
-        
+
     elif isinstance(img, str):
         if not os.path.exists(img):
             raise FileNotFoundError(f"Image path not found: {img}")
         return Image.open(img).convert("RGB")
-        
+
     elif isinstance(img, np.ndarray):
         # Handle numpy arrays
         if len(img.shape) == 3:
@@ -33,14 +34,14 @@ def to_pil_image(img: Any, is_bgr: bool = True) -> Image.Image:
             return Image.fromarray(img).convert("RGB")
         else:
             raise ValueError(f"Unsupported numpy array shape: {img.shape}")
-            
+
     elif isinstance(img, torch.Tensor):
         # Handle torch tensors
         t = img.clone().detach().cpu()
         # Remove batch dimension if shape is (1, C, H, W)
         if len(t.shape) == 4 and t.shape[0] == 1:
             t = t.squeeze(0)
-            
+
         if len(t.shape) == 3:
             # (C, H, W)
             if t.shape[0] in [1, 3]:
@@ -65,29 +66,32 @@ def to_pil_image(img: Any, is_bgr: bool = True) -> Image.Image:
             return F_t.to_pil_image(t).convert("RGB")
         else:
             raise ValueError(f"Unsupported torch Tensor shape: {img.shape}")
-            
+
     else:
         raise TypeError(f"Unsupported image type: {type(img)}")
+
 
 def preprocess_images(
     images: Union[Any, List[Any]],
     image_size: tuple,
     pixel_mean: list,
     pixel_std: list,
-    is_bgr: bool = True
+    is_bgr: bool = True,
 ) -> torch.Tensor:
     """Preprocesses a single image or a list/batch of images into a preprocessed float32 PyTorch tensor.
-    
+
     Performs resize (interpolation=BICUBIC), tensor conversion, and normalization.
     """
     # Create the validation transform exactly matching original datasets/make_dataloader.py
     # PIL.Image.BICUBIC is 3
-    transform = T.Compose([
-        T.Resize(image_size, interpolation=3),
-        T.ToTensor(),
-        T.Normalize(mean=pixel_mean, std=pixel_std)
-    ])
-    
+    transform = T.Compose(
+        [
+            T.Resize(image_size, interpolation=3),
+            T.ToTensor(),
+            T.Normalize(mean=pixel_mean, std=pixel_std),
+        ]
+    )
+
     if not isinstance(images, (list, tuple)):
         # Single image
         pil_img = to_pil_image(images, is_bgr=is_bgr)

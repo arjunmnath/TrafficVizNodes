@@ -1,5 +1,6 @@
 class InferenceConfig:
     """Minimal configuration for model inference."""
+
     def __init__(
         self,
         backbone: str = "resnet101_ibn_a",
@@ -48,18 +49,20 @@ class InferenceConfig:
 
     def to_yacs_mock(self):
         """Converts to a mock object simulating the nested attribute structure expected by make_model."""
+
         class YacsSubNode:
             def __init__(self, **kwargs):
                 self.__dict__.update(kwargs)
+
             def __repr__(self):
                 return str(self.__dict__)
-        
+
         cfg = YacsSubNode()
         cfg.MODEL = YacsSubNode(
             NAME=self.backbone,
             LAST_STRIDE=1,
-            PRETRAIN_CHOICE='no',
-            PRETRAIN_PATH='',
+            PRETRAIN_CHOICE="no",
+            PRETRAIN_PATH="",
             FROZEN=-1,
             NECK=self.neck,
             POOLING_METHOD=self.pooling_method,
@@ -73,29 +76,27 @@ class InferenceConfig:
             DROP_PATH=self.drop_path,
             COS_LAYER=self.cos_layer,
             DEVICE=self.device,
-            DEVICE_ID='0',
-            DIST_TRAIN=False
+            DEVICE_ID="0",
+            DIST_TRAIN=False,
         )
         cfg.INPUT = YacsSubNode(
             SIZE_TRAIN=list(self.image_size),
             SIZE_TEST=list(self.image_size),
             PIXEL_MEAN=list(self.pixel_mean),
-            PIXEL_STD=list(self.pixel_std)
+            PIXEL_STD=list(self.pixel_std),
         )
         cfg.TEST = YacsSubNode(
             NECK_FEAT=self.neck_feat,
-            FEAT_NORM='yes',
-            FLIP_FEATS='on' if self.flip_feats else 'off',
-            WEIGHT=self.checkpoint_path or ""
+            FEAT_NORM="yes",
+            FLIP_FEATS="on" if self.flip_feats else "off",
+            WEIGHT=self.checkpoint_path or "",
         )
-        cfg.SOLVER = YacsSubNode(
-            FP16_ENABLED=self.fp16,
-            COSINE_SCALE=64,
-            COSINE_MARGIN=0.35
-        )
+        cfg.SOLVER = YacsSubNode(FP16_ENABLED=self.fp16, COSINE_SCALE=64, COSINE_MARGIN=0.35)
         return cfg
 
     def __repr__(self):
-        return (f"InferenceConfig(backbone={self.backbone}, image_size={self.image_size}, "
-                f"device={self.device}, fp16={self.fp16}, batch_size={self.batch_size}, "
-                f"checkpoint_path={self.checkpoint_path})")
+        return (
+            f"InferenceConfig(backbone={self.backbone}, image_size={self.image_size}, "
+            f"device={self.device}, fp16={self.fp16}, batch_size={self.batch_size}, "
+            f"checkpoint_path={self.checkpoint_path})"
+        )

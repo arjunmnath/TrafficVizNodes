@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from PIL import Image
 
+
 class BaseRetrievalEncoder(ABC):
     """Abstract base class for retrieval encoders."""
 

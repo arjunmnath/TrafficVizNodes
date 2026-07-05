@@ -37,7 +37,13 @@ _CAMERA_PATTERNS = (
 _TIME_PATTERNS: List[Tuple[re.Pattern[str], str]] = [
     (re.compile(r"\blast\s+(\d+)\s+minutes?\b", re.IGNORECASE), "last_minutes"),
     (re.compile(r"\blast\s+(\d+)\s+hours?\b", re.IGNORECASE), "last_hours"),
-    (re.compile(r"\bbetween\s+(\d{1,2})(?::(\d{2}))?\s*(?:am|pm)?\s+and\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b", re.IGNORECASE), "between"),
+    (
+        re.compile(
+            r"\bbetween\s+(\d{1,2})(?::(\d{2}))?\s*(?:am|pm)?\s+and\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b",
+            re.IGNORECASE,
+        ),
+        "between",
+    ),
     (re.compile(r"\bafter\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b", re.IGNORECASE), "after"),
     (re.compile(r"\bbefore\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b", re.IGNORECASE), "before"),
     (re.compile(r"\bbefore\s+noon\b", re.IGNORECASE), "before_noon"),
@@ -145,9 +151,12 @@ def parse_query(
             filters["camera_timestamp_gte"] = datetime(
                 day.year, day.month, day.day, int(start), int((start % 1) * 60), tzinfo=timezone.utc
             ).timestamp()
-            filters["camera_timestamp_lt"] = datetime(
-                day.year, day.month, day.day, int(end), int((end % 1) * 60), tzinfo=timezone.utc
-            ).timestamp() + 1
+            filters["camera_timestamp_lt"] = (
+                datetime(
+                    day.year, day.month, day.day, int(end), int((end % 1) * 60), tzinfo=timezone.utc
+                ).timestamp()
+                + 1
+            )
         elif kind == "after":
             hour = _parse_hour(int(match.group(1)), int(match.group(2) or 0), match.group(3))
             day_start, _ = _day_bounds(reference, 0)
@@ -216,5 +225,7 @@ def _extract_semantic_text(text: str, spans: List[Tuple[int, int]]) -> str:
     cleaned.append(text[cursor:])
 
     semantic = " ".join(part.strip() for part in cleaned if part.strip())
-    semantic = re.sub(r"\b(?:at|on|from|in|during|show|find|all|the)\b", " ", semantic, flags=re.IGNORECASE)
+    semantic = re.sub(
+        r"\b(?:at|on|from|in|during|show|find|all|the)\b", " ", semantic, flags=re.IGNORECASE
+    )
     return re.sub(r"\s+", " ", semantic).strip()

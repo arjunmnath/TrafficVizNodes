@@ -50,9 +50,13 @@ def _patch_huggingface_florence2(model_name: str):
     if not os.path.exists(cache_dir):
         return
 
-    config_files = glob.glob(os.path.join(cache_dir, "**", "configuration_florence2.py"), recursive=True)
+    config_files = glob.glob(
+        os.path.join(cache_dir, "**", "configuration_florence2.py"), recursive=True
+    )
     model_files = glob.glob(os.path.join(cache_dir, "**", "modeling_florence2.py"), recursive=True)
-    processing_files = glob.glob(os.path.join(cache_dir, "**", "processing_florence2.py"), recursive=True)
+    processing_files = glob.glob(
+        os.path.join(cache_dir, "**", "processing_florence2.py"), recursive=True
+    )
 
     for cf in config_files:
         try:
@@ -92,7 +96,7 @@ def _patch_huggingface_florence2(model_name: str):
                 r"def _supports_flash_attn_2\(self\):\s+.*?return self\.language_model\._supports_flash_attn_2",
                 "def _supports_flash_attn_2(self):\n        if not hasattr(self, 'language_model'):\n            return False\n        return self.language_model._supports_flash_attn_2",
                 content,
-                flags=re.DOTALL
+                flags=re.DOTALL,
             )
             if count1 > 0:
                 content = sub1
@@ -103,7 +107,7 @@ def _patch_huggingface_florence2(model_name: str):
                 r"def _supports_sdpa\(self\):\s+.*?return self\.language_model\._supports_sdpa",
                 "def _supports_sdpa(self):\n        if not hasattr(self, 'language_model'):\n            return False\n        return self.language_model._supports_sdpa",
                 content,
-                flags=re.DOTALL
+                flags=re.DOTALL,
             )
             if count2 > 0:
                 content = sub2
@@ -132,7 +136,7 @@ class FlorenceReasoner(BaseVQAReasoner):
         device: str = "auto",
     ) -> None:
         self.logger = setup_logger("FlorenceReasoner")
-        
+
         # Self-heal Hugging Face cache files for Florence-2 compatibility with transformers v4.50+
         _patch_huggingface_florence2(model_name)
 
@@ -141,12 +145,16 @@ class FlorenceReasoner(BaseVQAReasoner):
         self.device = self._resolve_device(device)
         dtype = self._resolve_dtype(self.device)
 
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            dtype=dtype,
-            trust_remote_code=True,
-            attn_implementation="eager",
-        ).to(self.device).eval()
+        self.model = (
+            AutoModelForCausalLM.from_pretrained(
+                model_name,
+                dtype=dtype,
+                trust_remote_code=True,
+                attn_implementation="eager",
+            )
+            .to(self.device)
+            .eval()
+        )
 
         self.processor = AutoProcessor.from_pretrained(
             model_name,
@@ -161,9 +169,7 @@ class FlorenceReasoner(BaseVQAReasoner):
         top_k: int = 5,
     ) -> List[RankedResult]:
         """Score each candidate image against the query and return top-K results."""
-        self.logger.info(
-            f"Florence reasoning on {len(candidates)} candidates for: '{query}'"
-        )
+        self.logger.info(f"Florence reasoning on {len(candidates)} candidates for: '{query}'")
         results: List[RankedResult] = []
 
         for candidate in candidates:
@@ -192,14 +198,16 @@ class FlorenceReasoner(BaseVQAReasoner):
         img = frame.convert("RGB").resize((768, 768))
 
         caption_prompt = "<CAPTION>"
-        caption = self._run_task(caption_prompt, img).get(
-            "<CAPTION>", "No description available."
-        ).strip()
+        caption = (
+            self._run_task(caption_prompt, img)
+            .get("<CAPTION>", "No description available.")
+            .strip()
+        )
 
         vqa_prompt = f"<VQA>Does the image contain: {query}? Answer yes or no."
-        answer = self._run_task(vqa_prompt, img, task_key="<VQA>").get(
-            "<VQA>", "no"
-        ).strip().lower()
+        answer = (
+            self._run_task(vqa_prompt, img, task_key="<VQA>").get("<VQA>", "no").strip().lower()
+        )
 
         score = 10.0 if "yes" in answer else 0.0
         explanation = f"Matched: {answer.capitalize()}. Caption: {caption}"
@@ -211,9 +219,7 @@ class FlorenceReasoner(BaseVQAReasoner):
         image: Image.Image,
         task_key: str | None = None,
     ) -> dict:
-        inputs = self.processor(text=prompt, images=image, return_tensors="pt").to(
-            self.device
-        )
+        inputs = self.processor(text=prompt, images=image, return_tensors="pt").to(self.device)
         if "pixel_values" in inputs:
             inputs["pixel_values"] = inputs["pixel_values"].to(self.model.dtype)
 
@@ -226,9 +232,7 @@ class FlorenceReasoner(BaseVQAReasoner):
                 use_cache=False,
             )
 
-        generated_text = self.processor.batch_decode(
-            generated_ids, skip_special_tokens=False
-        )[0]
+        generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
         return self.processor.post_process_generation(
             generated_text,
             task=task_key or prompt,

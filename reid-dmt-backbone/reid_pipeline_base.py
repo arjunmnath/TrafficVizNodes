@@ -12,13 +12,16 @@ import cv2
 import numpy as np
 import torch
 
+
 class SimpleRegistry:
     def __init__(self, match_threshold=0.6):
         self.identities = {}  # global_id -> {"embedding": np.ndarray, "occurrences": []}
         self.next_id = 1
         self.match_threshold = match_threshold
 
-    def match_and_add(self, embedding, video_name, frame_num, timestamp, bbox, local_track_id, class_label):
+    def match_and_add(
+        self, embedding, video_name, frame_num, timestamp, bbox, local_track_id, class_label
+    ):
         best_id = None
         best_sim = -1.0
         emb_norm = embedding / (np.linalg.norm(embedding) + 1e-8)
@@ -39,40 +42,33 @@ class SimpleRegistry:
             "bbox": [int(x) for x in bbox],
             "local_track_id": int(local_track_id),
             "class_label": class_label,
-            "similarity": round(best_sim, 4) if best_id is not None else 1.0
+            "similarity": round(best_sim, 4) if best_id is not None else 1.0,
         }
 
         if best_id is not None and best_sim >= self.match_threshold:
             self.identities[best_id]["occurrences"].append(occurrence)
             self.identities[best_id]["embedding"] = self.update_prototype(
-                self.identities[best_id]["embedding"],
-                emb_norm
+                self.identities[best_id]["embedding"], emb_norm
             )
             return best_id, best_sim
         else:
             new_id = self.next_id
             self.next_id += 1
-            self.identities[new_id] = {
-                "embedding": embedding,
-                "occurrences": [occurrence]
-            }
+            self.identities[new_id] = {"embedding": embedding, "occurrences": [occurrence]}
             return new_id, 1.0
 
     def get_results_summary(self):
         summary = []
         for global_id, data in self.identities.items():
-            summary.append({
-                "global_id": global_id,
-                "occurrences": data["occurrences"]
-            })
+            summary.append({"global_id": global_id, "occurrences": data["occurrences"]})
         return summary
 
     def update_prototype(
-            self,
-            prototype: np.ndarray,
-            embedding: np.ndarray,
-            alpha: float = 0.1,
-            similarity_threshold: float = 0.8,
+        self,
+        prototype: np.ndarray,
+        embedding: np.ndarray,
+        alpha: float = 0.1,
+        similarity_threshold: float = 0.8,
     ) -> np.ndarray:
         similarity = np.dot(prototype, embedding)
 
@@ -115,6 +111,7 @@ def resolve_path(p, base_dir):
 
 class ReIDPipelineListener:
     """Interface for listening to ReID pipeline execution events."""
+
     def on_init_start(self):
         pass
 
@@ -124,12 +121,23 @@ class ReIDPipelineListener:
     def on_init_end(self):
         pass
 
-    def on_video_start(self, video_path: str, video_idx: int, total_videos: int, total_frames: int, fps: float):
+    def on_video_start(
+        self, video_path: str, video_idx: int, total_videos: int, total_frames: int, fps: float
+    ):
         pass
 
-    def on_frame_processed(self, video_name: str, video_idx: int, total_videos: int, frame_count: int,
-                           total_frames: int, elapsed_time: float, fps: float, registry: SimpleRegistry,
-                           log_message: str | None = None):
+    def on_frame_processed(
+        self,
+        video_name: str,
+        video_idx: int,
+        total_videos: int,
+        frame_count: int,
+        total_frames: int,
+        elapsed_time: float,
+        fps: float,
+        registry: SimpleRegistry,
+        log_message: str | None = None,
+    ):
         pass
 
     def on_video_end(self, video_path: str, total_frames: int):
@@ -144,14 +152,22 @@ class ReIDPipelineListener:
 
 class BaseReIDPipeline:
     """Base ReID Tracking Pipeline that implements the unified tracking loop."""
-    def __init__(self, yolo_path, threshold=0.8, max_frames=0, sample_fps=0.0, output_path="reid_test_results.json"):
+
+    def __init__(
+        self,
+        yolo_path,
+        threshold=0.8,
+        max_frames=0,
+        sample_fps=0.0,
+        output_path="reid_test_results.json",
+    ):
         self.yolo_path = yolo_path
         self.threshold = threshold
         self.max_frames = max_frames
         self.sample_fps = sample_fps
         self.output_path = output_path
         self.registry = SimpleRegistry(match_threshold=threshold)
-        
+
         self.tracker = None
 
     def initialize(self, listener: ReIDPipelineListener = None):
@@ -164,6 +180,7 @@ class BaseReIDPipeline:
         if listener:
             listener.on_init_status("Loading YOLOv8 Tracker...")
         from ultralytics import YOLO
+
         self.tracker = YOLO(self.yolo_path)
 
         if listener:
@@ -174,7 +191,7 @@ class BaseReIDPipeline:
 
     def _extract_embedding(self, crop: np.ndarray) -> np.ndarray:
         """Extract a single L2-normalized embedding vector for a crop in BGR format.
-        
+
         Must return a numpy array of shape (embedding_dim,).
         """
         raise NotImplementedError("Subclasses must implement _extract_embedding")
@@ -213,7 +230,7 @@ class BaseReIDPipeline:
                             elapsed_time=0.0,
                             fps=0.0,
                             registry=self.registry,
-                            log_message=f"Sampling video at {self.sample_fps} FPS (every {frame_interval} frames)"
+                            log_message=f"Sampling video at {self.sample_fps} FPS (every {frame_interval} frames)",
                         )
 
                 if listener:
@@ -241,10 +258,7 @@ class BaseReIDPipeline:
                     timestamp = frame_count / fps
 
                     results = self.tracker.track(
-                        frame,
-                        persist=True,
-                        tracker="bytetrack.yaml",
-                        verbose=False
+                        frame, persist=True, tracker="bytetrack.yaml", verbose=False
                     )
 
                     elapsed = time.time() - start_time
@@ -260,7 +274,7 @@ class BaseReIDPipeline:
                                 total_frames=total_frames,
                                 elapsed_time=elapsed,
                                 fps=curr_fps,
-                                registry=self.registry
+                                registry=self.registry,
                             )
                         continue
 
@@ -275,7 +289,7 @@ class BaseReIDPipeline:
                                 total_frames=total_frames,
                                 elapsed_time=elapsed,
                                 fps=curr_fps,
-                                registry=self.registry
+                                registry=self.registry,
                             )
                         continue
 
@@ -283,7 +297,9 @@ class BaseReIDPipeline:
                     track_ids = boxes_res.id.int().cpu().numpy()
                     cls_ids = boxes_res.cls.int().cpu().numpy()
 
-                    for crop_idx, (box_coords, track_id, cls_id) in enumerate(zip(boxes, track_ids, cls_ids)):
+                    for crop_idx, (box_coords, track_id, cls_id) in enumerate(
+                        zip(boxes, track_ids, cls_ids)
+                    ):
                         x1, y1, x2, y2 = map(int, box_coords)
                         x1, y1 = max(0, x1), max(0, y1)
                         x2, y2 = min(frame.shape[1], x2), min(frame.shape[0], y2)
@@ -304,10 +320,10 @@ class BaseReIDPipeline:
                             timestamp=timestamp,
                             bbox=[x1, y1, x2, y2],
                             local_track_id=track_id,
-                            class_label=class_label
+                            class_label=class_label,
                         )
 
-                        t_str = time.strftime('%H:%M:%S')
+                        t_str = time.strftime("%H:%M:%S")
                         if similarity >= self.registry.match_threshold:
                             log_line = f"[{t_str}] [bold green]MATCH[/bold green] - Track {track_id} ({class_label}) -> Global ID [bold green]{global_id:03d}[/bold green] (sim: {similarity:.3f})"
                         else:
@@ -323,7 +339,7 @@ class BaseReIDPipeline:
                                 elapsed_time=elapsed,
                                 fps=curr_fps,
                                 registry=self.registry,
-                                log_message=log_line
+                                log_message=log_line,
                             )
 
                     # Periodic update to refresh layout and display progress
@@ -336,7 +352,7 @@ class BaseReIDPipeline:
                             total_frames=total_frames,
                             elapsed_time=elapsed,
                             fps=curr_fps,
-                            registry=self.registry
+                            registry=self.registry,
                         )
 
                 cap.release()
@@ -345,14 +361,16 @@ class BaseReIDPipeline:
 
         except KeyboardInterrupt:
             if listener:
-                listener.on_error("Pipeline interrupted by user (Ctrl+C). Saving partial results...")
-            if 'cap' in locals() and cap.isOpened():
+                listener.on_error(
+                    "Pipeline interrupted by user (Ctrl+C). Saving partial results..."
+                )
+            if "cap" in locals() and cap.isOpened():
                 cap.release()
 
         # Save results
         summary = self.registry.get_results_summary()
         os.makedirs(os.path.dirname(os.path.abspath(self.output_path)), exist_ok=True)
-        with open(self.output_path, 'w') as f:
+        with open(self.output_path, "w") as f:
             json.dump(summary, f, indent=4)
 
         if listener:

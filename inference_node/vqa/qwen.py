@@ -50,9 +50,7 @@ class QwenVLMReasoner(BaseVQAReasoner):
         top_k: int = 5,
     ) -> List[RankedResult]:
         """Score each candidate image against the query and return top-K results."""
-        self.logger.info(
-            f"Qwen2-VL reasoning on {len(candidates)} candidates for: '{query}'"
-        )
+        self.logger.info(f"Qwen2-VL reasoning on {len(candidates)} candidates for: '{query}'")
         results: List[RankedResult] = []
 
         for candidate in candidates:
@@ -98,9 +96,9 @@ class QwenVLMReasoner(BaseVQAReasoner):
         for line in response.split("\n"):
             line = line.strip()
             if line.lower().startswith("answer:"):
-                answer_line = line[len("answer:"):].strip().lower()
+                answer_line = line[len("answer:") :].strip().lower()
             elif line.lower().startswith("explanation:"):
-                explanation_line = line[len("explanation:"):].strip()
+                explanation_line = line[len("explanation:") :].strip()
 
         if answer_line:
             score = 10.0 if "yes" in answer_line else 0.0
@@ -110,7 +108,9 @@ class QwenVLMReasoner(BaseVQAReasoner):
                 explanation = f"Matched: {answer_line.capitalize()}. Explanation: {response}"
         else:
             # Fallback
-            is_yes = any(word in response[:25].lower() for word in ["yes", "yeah", "yep", "contains"])
+            is_yes = any(
+                word in response[:25].lower() for word in ["yes", "yeah", "yep", "contains"]
+            )
             score = 10.0 if is_yes else 0.0
             explanation = response
 

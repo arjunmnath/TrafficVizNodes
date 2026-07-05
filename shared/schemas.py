@@ -1,9 +1,11 @@
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
 
+
 class Attributes(BaseModel):
     color: str
     type: Optional[str] = None  # None for person, string for vehicle
+
 
 class TrackEvent(BaseModel):
     model_config = ConfigDict(populate_by_name=True)

@@ -37,14 +37,18 @@ class EVACLIPEncoder(BaseRetrievalEncoder):
         else:
             self.hf_repo = "BAAI/EVA-CLIP-8B"
 
-
         self.logger.info(
             f"Loading EVA-CLIP via HF transformers: model={self.hf_repo} on {self.device}"
         )
         try:
             from transformers import AutoModel, AutoProcessor
+
             self.processor = AutoProcessor.from_pretrained(self.hf_repo, trust_remote_code=True)
-            self.model = AutoModel.from_pretrained(self.hf_repo, trust_remote_code=True).to(self.device).eval()
+            self.model = (
+                AutoModel.from_pretrained(self.hf_repo, trust_remote_code=True)
+                .to(self.device)
+                .eval()
+            )
         except Exception as e:
             self.logger.error(f"Failed to load EVA-CLIP via HF AutoModel: {e}")
             raise e
@@ -67,7 +71,6 @@ class EVACLIPEncoder(BaseRetrievalEncoder):
         if isinstance(image, np.ndarray):
             image = Image.fromarray(image)
         pil_image = image.convert("RGB")
-
 
         inputs = self.processor(images=pil_image, return_tensors="pt").to(self.device)
         with torch.no_grad():

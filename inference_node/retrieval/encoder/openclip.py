@@ -31,9 +31,7 @@ class OpenCLIPEncoder(BaseRetrievalEncoder):
         else:
             hf_model_name = "openai/clip-vit-large-patch14"
 
-        self.logger.info(
-            f"Loading Hugging Face CLIP encoder: {hf_model_name} on {self.device}"
-        )
+        self.logger.info(f"Loading Hugging Face CLIP encoder: {hf_model_name} on {self.device}")
 
         try:
             self.processor = CLIPProcessor.from_pretrained(hf_model_name)

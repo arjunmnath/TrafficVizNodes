@@ -1,6 +1,7 @@
 from ultralytics import YOLO
 import numpy as np
 
+
 class YOLODetector:
     def __init__(self, model_path: str = "yolov8s.pt", conf: float = 0.5):
         self.model = YOLO(model_path)

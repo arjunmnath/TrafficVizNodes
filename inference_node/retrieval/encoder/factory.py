@@ -19,20 +19,25 @@ def get_retrieval_encoder(model_name: str, device: str = "auto") -> BaseRetrieva
     model_name_lower = model_name.lower()
     if "eva" in model_name_lower:
         from inference_node.retrieval.encoder.evaclip import EVACLIPEncoder
+
         return EVACLIPEncoder(model_name=model_name, device=device)
     elif "siglip" in model_name_lower:
         from inference_node.retrieval.encoder.siglip2 import SigLIP2Encoder
+
         return SigLIP2Encoder(model_name=model_name, device=device)
     elif "openclip" in model_name_lower or "vit-" in model_name_lower or "clip" in model_name_lower:
         from inference_node.retrieval.encoder.openclip import OpenCLIPEncoder
+
         return OpenCLIPEncoder(model_name=model_name, device=device)
     else:
         # Default to SigLIP2 for backwards compatibility with any standard HuggingFace models,
         # but log a warning.
         import logging
+
         logger = logging.getLogger("RetrievalEncoderFactory")
         logger.warning(
             f"Unrecognized retrieval model '{model_name}'. Defaulting to SigLIP2 encoder."
         )
         from inference_node.retrieval.encoder.siglip2 import SigLIP2Encoder
+
         return SigLIP2Encoder(model_name=model_name, device=device)

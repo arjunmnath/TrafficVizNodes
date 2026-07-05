@@ -29,9 +29,7 @@ class RetrievalIndexer:
         bbox = event_data.get("bbox")
 
         if video_pos_ms is None or not bbox:
-            self.logger.warning(
-                f"Event missing video_pos_ms or bbox for camera {camera_id}"
-            )
+            self.logger.warning(f"Event missing video_pos_ms or bbox for camera {camera_id}")
             return None
 
         crop = self.crop_extractor.extract_crop(

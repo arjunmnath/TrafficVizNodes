@@ -1,13 +1,13 @@
 import torch
 import torch.nn as nn
 from .backbones.resnet import ResNet, BasicBlock, Bottleneck
-from .backbones.resnet_ibn_a import resnet50_ibn_a,resnet101_ibn_a
+from .backbones.resnet_ibn_a import resnet50_ibn_a, resnet101_ibn_a
 from .backbones.se_resnet_ibn_a import se_resnet101_ibn_a
 from .backbones.resnest import resnest101, resnest50, resnest200, resnest269
 from .backbones.resnext_ibn import resnext101_ibn_a
 from .backbones.vit_pytorch import vit_base_patch16_224_TransReID, vit_small_patch16_224_TransReID
 from .backbones.densenet_ibn import densenet169_ibn_a
-from .layers.pooling import GeM, GeneralizedMeanPooling,GeneralizedMeanPoolingP
+from .layers.pooling import GeM, GeneralizedMeanPooling, GeneralizedMeanPoolingP
 import torch.nn.functional as F
 from efficientnet_pytorch import EfficientNet
 import copy
@@ -15,25 +15,27 @@ import copy
 
 def weights_init_kaiming(m):
     classname = m.__class__.__name__
-    if classname.find('Linear') != -1:
-        nn.init.kaiming_normal_(m.weight, a=0, mode='fan_out')
+    if classname.find("Linear") != -1:
+        nn.init.kaiming_normal_(m.weight, a=0, mode="fan_out")
         nn.init.constant_(m.bias, 0.0)
 
-    elif classname.find('Conv') != -1:
-        nn.init.kaiming_normal_(m.weight, a=0, mode='fan_in')
+    elif classname.find("Conv") != -1:
+        nn.init.kaiming_normal_(m.weight, a=0, mode="fan_in")
         if m.bias is not None:
             nn.init.constant_(m.bias, 0.0)
-    elif classname.find('BatchNorm') != -1:
+    elif classname.find("BatchNorm") != -1:
         if m.affine:
             nn.init.constant_(m.weight, 1.0)
             nn.init.constant_(m.bias, 0.0)
 
+
 def weights_init_classifier(m):
     classname = m.__class__.__name__
-    if classname.find('Linear') != -1:
+    if classname.find("Linear") != -1:
         nn.init.normal_(m.weight, std=0.001)
         if m.bias:
             nn.init.constant_(m.bias, 0.0)
+
 
 class Backbone(nn.Module):
     def __init__(self, num_classes, cfg):
@@ -46,65 +48,66 @@ class Backbone(nn.Module):
         self.neck_feat = cfg.TEST.NECK_FEAT
         self.model_name = model_name
 
-        if model_name == 'resnet50':
+        if model_name == "resnet50":
             self.in_planes = 2048
-            self.base = ResNet(last_stride=last_stride,
-                               block=Bottleneck, frozen_stages=cfg.MODEL.FROZEN,
-                               layers=[3, 4, 6, 3])
-            print('using resnet50 as a backbone')
-        elif model_name == 'resnet50_ibn_a':
+            self.base = ResNet(
+                last_stride=last_stride,
+                block=Bottleneck,
+                frozen_stages=cfg.MODEL.FROZEN,
+                layers=[3, 4, 6, 3],
+            )
+            print("using resnet50 as a backbone")
+        elif model_name == "resnet50_ibn_a":
             self.in_planes = 2048
             self.base = resnet50_ibn_a(last_stride)
-            print('using resnet50_ibn_a as a backbone')
-        elif model_name == 'resnet152':
+            print("using resnet50_ibn_a as a backbone")
+        elif model_name == "resnet152":
             self.in_planes = 2048
-            self.base = ResNet(last_stride=last_stride,
-                               block=Bottleneck,
-                               layers=[3, 8, 36, 3])
-        elif model_name == 'resnet101_ibn_a':
+            self.base = ResNet(last_stride=last_stride, block=Bottleneck, layers=[3, 8, 36, 3])
+        elif model_name == "resnet101_ibn_a":
             self.in_planes = 2048
             self.base = resnet101_ibn_a(last_stride, frozen_stages=cfg.MODEL.FROZEN)
-            print('using resnet101_ibn_a as a backbone')
-        elif model_name == 'se_resnet101_ibn_a':
+            print("using resnet101_ibn_a as a backbone")
+        elif model_name == "se_resnet101_ibn_a":
             self.in_planes = 2048
-            self.base = se_resnet101_ibn_a(last_stride,frozen_stages=cfg.MODEL.FROZEN)
-            print('using se_resnet101_ibn_a as a backbone')
-        elif model_name == 'efficientnet_b7':
-                print('using efficientnet_b7 as a backbone')
-                self.base = EfficientNet.from_pretrained('efficientnet-b7', advprop=False)
-                self.in_planes = self.base._fc.in_features
-        elif model_name == 'densenet169_ibn_a':
+            self.base = se_resnet101_ibn_a(last_stride, frozen_stages=cfg.MODEL.FROZEN)
+            print("using se_resnet101_ibn_a as a backbone")
+        elif model_name == "efficientnet_b7":
+            print("using efficientnet_b7 as a backbone")
+            self.base = EfficientNet.from_pretrained("efficientnet-b7", advprop=False)
+            self.in_planes = self.base._fc.in_features
+        elif model_name == "densenet169_ibn_a":
             self.in_planes = 1664
             self.base = densenet169_ibn_a()
-            print('using densenet169_ibn_a as a backbone')
-        elif model_name == 'resnest50':
+            print("using densenet169_ibn_a as a backbone")
+        elif model_name == "resnest50":
             self.in_planes = 2048
             self.base = resnest50(last_stride)
-            print('using resnest50 as a backbone')
-        elif model_name == 'resnest101':
+            print("using resnest50 as a backbone")
+        elif model_name == "resnest101":
             self.in_planes = 2048
             self.base = resnest101(last_stride)
-            print('using resnest101 as a backbone')
-        elif model_name == 'resnest200':
+            print("using resnest101 as a backbone")
+        elif model_name == "resnest200":
             self.in_planes = 2048
             self.base = resnest200(last_stride)
-            print('using resnest200 as a backbone')
-        elif model_name == 'resnest269':
+            print("using resnest200 as a backbone")
+        elif model_name == "resnest269":
             self.in_planes = 2048
             self.base = resnest269(last_stride)
-            print('using resnest269 as a backbone')
-        elif model_name == 'resnext101_ibn_a':
+            print("using resnest269 as a backbone")
+        elif model_name == "resnext101_ibn_a":
             self.in_planes = 2048
             self.base = resnext101_ibn_a()
-            print('using resnext101_ibn_a as a backbone')
+            print("using resnext101_ibn_a as a backbone")
         else:
-            print('unsupported backbone! but got {}'.format(model_name))
+            print("unsupported backbone! but got {}".format(model_name))
 
-        if cfg.MODEL.POOLING_METHOD == 'gempoolP':
-            print('using GeMP pooling')
+        if cfg.MODEL.POOLING_METHOD == "gempoolP":
+            print("using GeMP pooling")
             self.gap = GeneralizedMeanPoolingP()
-        elif cfg.MODEL.POOLING_METHOD == 'gempool':
-            print('using GeM pooling')
+        elif cfg.MODEL.POOLING_METHOD == "gempool":
+            print("using GeM pooling")
             self.gap = GeM(freeze_p=False)
         else:
             self.gap = nn.AdaptiveAvgPool2d(1)
@@ -114,32 +117,31 @@ class Backbone(nn.Module):
         self.bottleneck.bias.requires_grad_(False)
         self.bottleneck.apply(weights_init_kaiming)
 
-        if pretrain_choice == 'imagenet' and model_name != 'efficientnet_b7':
+        if pretrain_choice == "imagenet" and model_name != "efficientnet_b7":
             self.base.load_param(model_path)
-            print('Loading pretrained ImageNet model......from {}'.format(model_path))
-        elif pretrain_choice == 'self':
-            param_dict = torch.load(model_path, map_location='cpu')
+            print("Loading pretrained ImageNet model......from {}".format(model_path))
+        elif pretrain_choice == "self":
+            param_dict = torch.load(model_path, map_location="cpu")
             for i in param_dict:
-                if 'classifier' in i:
+                if "classifier" in i:
                     continue
                 self.state_dict()[i].copy_(param_dict[i])
-            print('Loading finetune model......from {}'.format(model_path))
+            print("Loading finetune model......from {}".format(model_path))
 
-
-    def forward(self, x, label=None,cam_label=None):  # label is unused if self.cos_layer == 'no'
-        if self.model_name =='efficientnet_b7':
+    def forward(self, x, label=None, cam_label=None):  # label is unused if self.cos_layer == 'no'
+        if self.model_name == "efficientnet_b7":
             x = self.base.extract_features(x)
         else:
             x = self.base(x)
         global_feat = nn.functional.avg_pool2d(x, x.shape[2:4])
         global_feat = global_feat.view(global_feat.shape[0], -1)  # flatten to (bs, 2048)
 
-        if self.neck == 'no':
+        if self.neck == "no":
             feat = global_feat
-        elif self.neck == 'bnneck':
+        elif self.neck == "bnneck":
             feat = self.bottleneck(global_feat)
 
-        if self.neck_feat == 'after':
+        if self.neck_feat == "after":
             # print("Test with feature after BN")
             return feat
         else:
@@ -147,15 +149,14 @@ class Backbone(nn.Module):
             return global_feat
 
     def load_param(self, trained_path):
-        param_dict = torch.load(trained_path,map_location='cpu')
-        if 'state_dict' in param_dict:
-            param_dict = param_dict['state_dict']
+        param_dict = torch.load(trained_path, map_location="cpu")
+        if "state_dict" in param_dict:
+            param_dict = param_dict["state_dict"]
         for i in param_dict:
-            if 'classifier' in i or 'arcface' in i:
+            if "classifier" in i or "arcface" in i:
                 continue
-            self.state_dict()[i.replace('module.','')].copy_(param_dict[i])
-        print('Loading pretrained model from {}'.format(trained_path))
-
+            self.state_dict()[i.replace("module.", "")].copy_(param_dict[i])
+        print("Loading pretrained model from {}".format(trained_path))
 
 
 class build_transformer(nn.Module):
@@ -168,7 +169,7 @@ class build_transformer(nn.Module):
         self.neck = cfg.MODEL.NECK
         self.neck_feat = cfg.TEST.NECK_FEAT
 
-        print('using Transformer_type: {} as a backbone'.format(cfg.MODEL.Transformer_TYPE))
+        print("using Transformer_type: {} as a backbone".format(cfg.MODEL.Transformer_TYPE))
 
         if cfg.MODEL.CAMERA_EMBEDDING:
             camera_num = camera_num
@@ -180,11 +181,19 @@ class build_transformer(nn.Module):
         else:
             view_num = 0
 
-        self.base = factory[cfg.MODEL.Transformer_TYPE](img_size=cfg.INPUT.SIZE_TRAIN, aie_xishu=cfg.MODEL.AIE_COE,local_feature=cfg.MODEL.LOCAL_F, camera=camera_num, view=view_num, stride_size=cfg.MODEL.STRIDE_SIZE, drop_path_rate=cfg.MODEL.DROP_PATH)
+        self.base = factory[cfg.MODEL.Transformer_TYPE](
+            img_size=cfg.INPUT.SIZE_TRAIN,
+            aie_xishu=cfg.MODEL.AIE_COE,
+            local_feature=cfg.MODEL.LOCAL_F,
+            camera=camera_num,
+            view=view_num,
+            stride_size=cfg.MODEL.STRIDE_SIZE,
+            drop_path_rate=cfg.MODEL.DROP_PATH,
+        )
 
-        if pretrain_choice == 'imagenet':
+        if pretrain_choice == "imagenet":
             self.base.load_param(model_path)
-            print('Loading pretrained ImageNet model......from {}'.format(model_path))
+            print("Loading pretrained ImageNet model......from {}".format(model_path))
 
         self.gap = nn.AdaptiveAvgPool2d(1)
 
@@ -195,19 +204,19 @@ class build_transformer(nn.Module):
         self.bottleneck.bias.requires_grad_(False)
         self.bottleneck.apply(weights_init_kaiming)
 
-        if pretrain_choice == 'self':
-            param_dict = torch.load(model_path, map_location='cpu')
+        if pretrain_choice == "self":
+            param_dict = torch.load(model_path, map_location="cpu")
             for i in param_dict:
-                if 'classifier' in i:
+                if "classifier" in i:
                     continue
                 self.state_dict()[i].copy_(param_dict[i])
-            print('Loading finetune model......from {}'.format(model_path))
+            print("Loading finetune model......from {}".format(model_path))
 
-    def forward(self, x, label=None, cam_label= None):  # label is unused if self.cos_layer == 'no'
+    def forward(self, x, label=None, cam_label=None):  # label is unused if self.cos_layer == 'no'
         global_feat = self.base(x, cam_label=cam_label)
 
         feat = self.bottleneck(global_feat)
-        if self.neck_feat == 'after':
+        if self.neck_feat == "after":
             #  print("Test with feature after BN")
             return feat
         else:
@@ -215,26 +224,26 @@ class build_transformer(nn.Module):
             return global_feat
 
     def load_param(self, trained_path):
-        param_dict = torch.load(trained_path,map_location='cpu')
+        param_dict = torch.load(trained_path, map_location="cpu")
         for i in param_dict:
-            if 'classifier' in i or 'arcface' in i or 'gap' in i:
+            if "classifier" in i or "arcface" in i or "gap" in i:
                 continue
-           # self.state_dict()[i].copy_(param_dict[i])
-            self.state_dict()[i.replace('module.', '')].copy_(param_dict[i])
-        print('Loading pretrained model from {}'.format(trained_path))
-
+            # self.state_dict()[i].copy_(param_dict[i])
+            self.state_dict()[i.replace("module.", "")].copy_(param_dict[i])
+        print("Loading pretrained model from {}".format(trained_path))
 
 
 __factory_hh = {
-    'vit_base_patch16_224_TransReID': vit_base_patch16_224_TransReID,
-    'vit_small_patch16_224_TransReID': vit_small_patch16_224_TransReID,
+    "vit_base_patch16_224_TransReID": vit_base_patch16_224_TransReID,
+    "vit_small_patch16_224_TransReID": vit_small_patch16_224_TransReID,
 }
 
+
 def make_model(cfg, num_class, camera_num=0, view_num=0):
-    if cfg.MODEL.NAME == 'transformer':
+    if cfg.MODEL.NAME == "transformer":
         model = build_transformer(num_class, camera_num, view_num, cfg, __factory_hh)
-        print('===========building transformer===========')
+        print("===========building transformer===========")
     else:
-        print('===========ResNet===========')
+        print("===========ResNet===========")
         model = Backbone(num_class, cfg)
     return model

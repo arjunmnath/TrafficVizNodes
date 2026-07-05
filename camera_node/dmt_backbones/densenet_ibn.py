@@ -6,27 +6,33 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-__all__ = ['DenseNet_IBN', 'densenet121_ibn_a', 'densenet169_ibn_a',
-           'densenet201_ibn_a', 'densenet161_ibn_a']
+__all__ = [
+    "DenseNet_IBN",
+    "densenet121_ibn_a",
+    "densenet169_ibn_a",
+    "densenet201_ibn_a",
+    "densenet161_ibn_a",
+]
 
 
 model_urls = {
-    'densenet121_ibn_a': 'https://github.com/XingangPan/IBN-Net/releases/download/v1.0/densenet121_ibn_a-e4af5cc1.pth',
-    'densenet169_ibn_a': 'https://github.com/XingangPan/IBN-Net/releases/download/v1.0/densenet169_ibn_a-9f32c161.pth',
+    "densenet121_ibn_a": "https://github.com/XingangPan/IBN-Net/releases/download/v1.0/densenet121_ibn_a-e4af5cc1.pth",
+    "densenet169_ibn_a": "https://github.com/XingangPan/IBN-Net/releases/download/v1.0/densenet169_ibn_a-9f32c161.pth",
 }
 
 
 class IBN(nn.Module):
     r"""Instance-Batch Normalization layer from
-    `"Two at Once: Enhancing Learning and Generalization Capacities via IBN-Net" 
+    `"Two at Once: Enhancing Learning and Generalization Capacities via IBN-Net"
     <https://arxiv.org/pdf/1807.09441.pdf>`
     Args:
         planes (int): Number of channels for the input tensor
         ratio (float): Ratio of instance normalization in the IBN layer
     """
+
     def __init__(self, planes, ratio=0.5):
         super(IBN, self).__init__()
-        self.half = int(planes * (1-ratio))
+        self.half = int(planes * (1 - ratio))
         self.BN = nn.BatchNorm2d(self.half)
         self.IN = nn.InstanceNorm2d(planes - self.half, affine=True)
 
@@ -44,10 +50,11 @@ def densenet121_ibn_a(pretrained=False, **kwargs):
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = DenseNet_IBN(num_init_features=64, growth_rate=32, block_config=(6, 12, 24, 16),
-                     **kwargs)
+    model = DenseNet_IBN(
+        num_init_features=64, growth_rate=32, block_config=(6, 12, 24, 16), **kwargs
+    )
     if pretrained:
-        model.load_state_dict(torch.hub.load_state_dict_from_url(model_urls['densenet121_ibn_a']))
+        model.load_state_dict(torch.hub.load_state_dict_from_url(model_urls["densenet121_ibn_a"]))
     return model
 
 
@@ -57,10 +64,11 @@ def densenet169_ibn_a(pretrained=False, **kwargs):
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = DenseNet_IBN(num_init_features=64, growth_rate=32, block_config=(6, 12, 32, 32),
-                     **kwargs)
+    model = DenseNet_IBN(
+        num_init_features=64, growth_rate=32, block_config=(6, 12, 32, 32), **kwargs
+    )
     if pretrained:
-        model.load_state_dict(torch.hub.load_state_dict_from_url(model_urls['densenet169_ibn_a']))
+        model.load_state_dict(torch.hub.load_state_dict_from_url(model_urls["densenet169_ibn_a"]))
     return model
 
 
@@ -70,8 +78,9 @@ def densenet201_ibn_a(pretrained=False, **kwargs):
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = DenseNet_IBN(num_init_features=64, growth_rate=32, block_config=(6, 12, 48, 32),
-                     **kwargs)
+    model = DenseNet_IBN(
+        num_init_features=64, growth_rate=32, block_config=(6, 12, 48, 32), **kwargs
+    )
     if pretrained:
         warnings.warn("Pretrained model not available for Densenet-201-IBN-a!")
     return model
@@ -83,8 +92,9 @@ def densenet161_ibn_a(pretrained=False, **kwargs):
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = DenseNet_IBN(num_init_features=96, growth_rate=48, block_config=(6, 12, 36, 24),
-                     **kwargs)
+    model = DenseNet_IBN(
+        num_init_features=96, growth_rate=48, block_config=(6, 12, 36, 24), **kwargs
+    )
     if pretrained:
         warnings.warn("Pretrained model not available for Densenet-161-IBN-a!")
     return model
@@ -94,16 +104,33 @@ class _DenseLayer(nn.Sequential):
     def __init__(self, num_input_features, growth_rate, bn_size, drop_rate, ibn):
         super(_DenseLayer, self).__init__()
         if ibn:
-            self.add_module('norm1', IBN(num_input_features, 0.4)),
+            (self.add_module("norm1", IBN(num_input_features, 0.4)),)
         else:
-            self.add_module('norm1', nn.BatchNorm2d(num_input_features)),
-        self.add_module('relu1', nn.ReLU(inplace=True)),
-        self.add_module('conv1', nn.Conv2d(num_input_features, bn_size *
-                        growth_rate, kernel_size=1, stride=1, bias=False)),
-        self.add_module('norm2', nn.BatchNorm2d(bn_size * growth_rate)),
-        self.add_module('relu2', nn.ReLU(inplace=True)),
-        self.add_module('conv2', nn.Conv2d(bn_size * growth_rate, growth_rate,
-                        kernel_size=3, stride=1, padding=1, bias=False)),
+            (self.add_module("norm1", nn.BatchNorm2d(num_input_features)),)
+        (self.add_module("relu1", nn.ReLU(inplace=True)),)
+        (
+            self.add_module(
+                "conv1",
+                nn.Conv2d(
+                    num_input_features, bn_size * growth_rate, kernel_size=1, stride=1, bias=False
+                ),
+            ),
+        )
+        (self.add_module("norm2", nn.BatchNorm2d(bn_size * growth_rate)),)
+        (self.add_module("relu2", nn.ReLU(inplace=True)),)
+        (
+            self.add_module(
+                "conv2",
+                nn.Conv2d(
+                    bn_size * growth_rate,
+                    growth_rate,
+                    kernel_size=3,
+                    stride=1,
+                    padding=1,
+                    bias=False,
+                ),
+            ),
+        )
         self.drop_rate = drop_rate
 
     def forward(self, x):
@@ -118,20 +145,26 @@ class _DenseBlock(nn.Sequential):
         super(_DenseBlock, self).__init__()
         for i in range(num_layers):
             if ibn and i % 3 == 0:
-                layer = _DenseLayer(num_input_features + i * growth_rate, growth_rate, bn_size, drop_rate, True)
+                layer = _DenseLayer(
+                    num_input_features + i * growth_rate, growth_rate, bn_size, drop_rate, True
+                )
             else:
-                layer = _DenseLayer(num_input_features + i * growth_rate, growth_rate, bn_size, drop_rate, False)
-            self.add_module('denselayer%d' % (i + 1), layer)
+                layer = _DenseLayer(
+                    num_input_features + i * growth_rate, growth_rate, bn_size, drop_rate, False
+                )
+            self.add_module("denselayer%d" % (i + 1), layer)
 
 
 class _Transition(nn.Sequential):
     def __init__(self, num_input_features, num_output_features):
         super(_Transition, self).__init__()
-        self.add_module('norm', nn.BatchNorm2d(num_input_features))
-        self.add_module('relu', nn.ReLU(inplace=True))
-        self.add_module('conv', nn.Conv2d(num_input_features, num_output_features,
-                                          kernel_size=1, stride=1, bias=False))
-        self.add_module('pool', nn.AvgPool2d(kernel_size=2, stride=2))
+        self.add_module("norm", nn.BatchNorm2d(num_input_features))
+        self.add_module("relu", nn.ReLU(inplace=True))
+        self.add_module(
+            "conv",
+            nn.Conv2d(num_input_features, num_output_features, kernel_size=1, stride=1, bias=False),
+        )
+        self.add_module("pool", nn.AvgPool2d(kernel_size=2, stride=2))
 
 
 class DenseNet_IBN(nn.Module):
@@ -146,18 +179,34 @@ class DenseNet_IBN(nn.Module):
         drop_rate (float) - dropout rate after each dense layer
         num_classes (int) - number of classification classes
     """
-    def __init__(self, growth_rate=32, block_config=(6, 12, 24, 16),
-                 num_init_features=64, bn_size=4, drop_rate=0, num_classes=1000):
 
+    def __init__(
+        self,
+        growth_rate=32,
+        block_config=(6, 12, 24, 16),
+        num_init_features=64,
+        bn_size=4,
+        drop_rate=0,
+        num_classes=1000,
+    ):
         super(DenseNet_IBN, self).__init__()
 
         # First convolution
-        self.features = nn.Sequential(OrderedDict([
-            ('conv0', nn.Conv2d(3, num_init_features, kernel_size=7, stride=2, padding=3, bias=False)),
-            ('norm0', nn.BatchNorm2d(num_init_features)),
-            ('relu0', nn.ReLU(inplace=True)),
-            ('pool0', nn.MaxPool2d(kernel_size=3, stride=2, padding=1)),
-        ]))
+        self.features = nn.Sequential(
+            OrderedDict(
+                [
+                    (
+                        "conv0",
+                        nn.Conv2d(
+                            3, num_init_features, kernel_size=7, stride=2, padding=3, bias=False
+                        ),
+                    ),
+                    ("norm0", nn.BatchNorm2d(num_init_features)),
+                    ("relu0", nn.ReLU(inplace=True)),
+                    ("pool0", nn.MaxPool2d(kernel_size=3, stride=2, padding=1)),
+                ]
+            )
+        )
 
         # Each denseblock
         num_features = num_init_features
@@ -165,17 +214,25 @@ class DenseNet_IBN(nn.Module):
             ibn = True
             if i >= 3:
                 ibn = False
-            block = _DenseBlock(num_layers=num_layers, num_input_features=num_features,
-                                bn_size=bn_size, growth_rate=growth_rate, drop_rate=drop_rate, ibn=ibn)
-            self.features.add_module('denseblock%d' % (i + 1), block)
+            block = _DenseBlock(
+                num_layers=num_layers,
+                num_input_features=num_features,
+                bn_size=bn_size,
+                growth_rate=growth_rate,
+                drop_rate=drop_rate,
+                ibn=ibn,
+            )
+            self.features.add_module("denseblock%d" % (i + 1), block)
             num_features = num_features + num_layers * growth_rate
             if i != len(block_config) - 1:
-                trans = _Transition(num_input_features=num_features, num_output_features=num_features // 2)
-                self.features.add_module('transition%d' % (i + 1), trans)
+                trans = _Transition(
+                    num_input_features=num_features, num_output_features=num_features // 2
+                )
+                self.features.add_module("transition%d" % (i + 1), trans)
                 num_features = num_features // 2
 
         # Final batch norm
-        self.features.add_module('norm5', nn.BatchNorm2d(num_features))
+        self.features.add_module("norm5", nn.BatchNorm2d(num_features))
 
         # Linear layer
         self.classifier = nn.Linear(num_features, num_classes)
@@ -188,8 +245,8 @@ class DenseNet_IBN(nn.Module):
         return out
 
     def load_param(self, model_path):
-        param_dict = torch.load(model_path,map_location='cpu')
+        param_dict = torch.load(model_path, map_location="cpu")
         for i in param_dict:
-            if 'fc' in i:
+            if "fc" in i:
                 continue
             self.state_dict()[i].copy_(param_dict[i])

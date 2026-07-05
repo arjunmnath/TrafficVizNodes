@@ -1,13 +1,17 @@
 import torch
 import numpy as np
 
+
 def get_default_device() -> str:
     """Returns 'cuda' if GPU is available, otherwise 'cpu'."""
     return "cuda" if torch.cuda.is_available() else "cpu"
 
-def compute_distance_matrix(qf: torch.Tensor, gf: torch.Tensor, metric: str = "euclidean") -> np.ndarray:
+
+def compute_distance_matrix(
+    qf: torch.Tensor, gf: torch.Tensor, metric: str = "euclidean"
+) -> np.ndarray:
     """Helper to compute a pairwise distance matrix between query and gallery embeddings.
-    
+
     Supports both PyTorch Tensors and NumPy arrays.
     Returns a NumPy array.
     """
@@ -15,7 +19,7 @@ def compute_distance_matrix(qf: torch.Tensor, gf: torch.Tensor, metric: str = "e
         qf = torch.from_numpy(qf)
     if isinstance(gf, np.ndarray):
         gf = torch.from_numpy(gf)
-        
+
     if metric == "euclidean":
         m = qf.shape[0]
         n = gf.shape[0]
