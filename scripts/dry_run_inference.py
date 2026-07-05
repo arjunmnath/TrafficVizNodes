@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Single script to dry-run the inference node pipeline in memory.
 
-It loads the cropped images from reid_crops_cleaned, encodes them with SigLIP2,
+It loads the cropped images from v1, encodes them with SigLIP2,
 stores all embeddings in memory, and enters an interactive loop to wait for
 user query inputs. For each query, it filters/searches in memory and reranks
 candidates using Florence-2 VQA.
@@ -52,7 +52,7 @@ def parse_args():
     parser.add_argument(
         "--crops_dir",
         type=str,
-        default=str(workspace_root / "reid_crops_cleaned"),
+        default=str(workspace_root / "v1"),
         help="Root directory of ReID crops.",
     )
     parser.add_argument(

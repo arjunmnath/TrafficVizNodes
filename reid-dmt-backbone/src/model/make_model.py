@@ -9,7 +9,6 @@ from .backbones.vit_pytorch import vit_base_patch16_224_TransReID, vit_small_pat
 from .backbones.densenet_ibn import densenet169_ibn_a
 from .layers.pooling import GeM, GeneralizedMeanPooling,GeneralizedMeanPoolingP
 import torch.nn.functional as F
-from loss.metric_learning import Arcface, Cosface, AMSoftmax, CircleLoss
 from efficientnet_pytorch import EfficientNet
 import copy
 
@@ -111,28 +110,6 @@ class Backbone(nn.Module):
             self.gap = nn.AdaptiveAvgPool2d(1)
 
         self.num_classes = num_classes
-        self.ID_LOSS_TYPE = cfg.MODEL.ID_LOSS_TYPE
-
-        if self.ID_LOSS_TYPE == 'arcface':
-            print('using {} with s:{}, m: {}'.format(self.ID_LOSS_TYPE,cfg.SOLVER.COSINE_SCALE,cfg.SOLVER.COSINE_MARGIN))
-            self.classifier = Arcface(self.in_planes, self.num_classes,
-                                      s=cfg.SOLVER.COSINE_SCALE, m=cfg.SOLVER.COSINE_MARGIN)
-        elif self.ID_LOSS_TYPE == 'cosface':
-            print('using {} with s:{}, m: {}'.format(self.ID_LOSS_TYPE,cfg.SOLVER.COSINE_SCALE,cfg.SOLVER.COSINE_MARGIN))
-            self.classifier = Cosface(self.in_planes, self.num_classes,
-                                      s=cfg.SOLVER.COSINE_SCALE, m=cfg.SOLVER.COSINE_MARGIN)
-        elif self.ID_LOSS_TYPE == 'amsoftmax':
-            print('using {} with s:{}, m: {}'.format(self.ID_LOSS_TYPE,cfg.SOLVER.COSINE_SCALE,cfg.SOLVER.COSINE_MARGIN))
-            self.classifier = AMSoftmax(self.in_planes, self.num_classes,
-                                        s=cfg.SOLVER.COSINE_SCALE, m=cfg.SOLVER.COSINE_MARGIN)
-        elif self.ID_LOSS_TYPE == 'circle':
-            print('using {} with s:{}, m: {}'.format(self.ID_LOSS_TYPE, cfg.SOLVER.COSINE_SCALE, cfg.SOLVER.COSINE_MARGIN))
-            self.classifier = CircleLoss(self.in_planes, self.num_classes,
-                                        s=cfg.SOLVER.COSINE_SCALE, m=cfg.SOLVER.COSINE_MARGIN) 
-        else:
-            self.classifier = nn.Linear(self.in_planes, self.num_classes, bias=False)
-            self.classifier.apply(weights_init_classifier)
-
         self.bottleneck = nn.BatchNorm1d(self.in_planes)
         self.bottleneck.bias.requires_grad_(False)
         self.bottleneck.apply(weights_init_kaiming)
@@ -162,20 +139,12 @@ class Backbone(nn.Module):
         elif self.neck == 'bnneck':
             feat = self.bottleneck(global_feat)
 
-        if self.training:
-            if self.ID_LOSS_TYPE in ('arcface', 'cosface', 'amsoftmax', 'circle'):
-                cls_score = self.classifier(feat, label)
-            else:
-                cls_score = self.classifier(feat)
-
-            return cls_score, global_feat  # global feature for triplet loss
+        if self.neck_feat == 'after':
+            # print("Test with feature after BN")
+            return feat
         else:
-            if self.neck_feat == 'after':
-                # print("Test with feature after BN")
-                return feat
-            else:
-                # print("Test with feature before BN")
-                return global_feat
+            # print("Test with feature before BN")
+            return global_feat
 
     def load_param(self, trained_path):
         param_dict = torch.load(trained_path,map_location='cpu')
@@ -221,26 +190,6 @@ class build_transformer(nn.Module):
 
         self.num_classes = num_classes
         self.in_planes = self.base.embed_dim
-        self.ID_LOSS_TYPE = cfg.MODEL.ID_LOSS_TYPE
-        if self.ID_LOSS_TYPE == 'arcface':
-            print('using {} with s:{}, m: {}'.format(self.ID_LOSS_TYPE,cfg.SOLVER.COSINE_SCALE,cfg.SOLVER.COSINE_MARGIN))
-            self.classifier = Arcface(self.in_planes, self.num_classes,
-                                      s=cfg.SOLVER.COSINE_SCALE, m=cfg.SOLVER.COSINE_MARGIN)
-        elif self.ID_LOSS_TYPE == 'cosface':
-            print('using {} with s:{}, m: {}'.format(self.ID_LOSS_TYPE,cfg.SOLVER.COSINE_SCALE,cfg.SOLVER.COSINE_MARGIN))
-            self.classifier = Cosface(self.in_planes, self.num_classes,
-                                      s=cfg.SOLVER.COSINE_SCALE, m=cfg.SOLVER.COSINE_MARGIN)
-        elif self.ID_LOSS_TYPE == 'amsoftmax':
-            print('using {} with s:{}, m: {}'.format(self.ID_LOSS_TYPE,cfg.SOLVER.COSINE_SCALE,cfg.SOLVER.COSINE_MARGIN))
-            self.classifier = AMSoftmax(self.in_planes, self.num_classes,
-                                        s=cfg.SOLVER.COSINE_SCALE, m=cfg.SOLVER.COSINE_MARGIN)
-        elif self.ID_LOSS_TYPE == 'circle':
-            print('using {} with s:{}, m: {}'.format(self.ID_LOSS_TYPE, cfg.SOLVER.COSINE_SCALE, cfg.SOLVER.COSINE_MARGIN))
-            self.classifier = CircleLoss(self.in_planes, self.num_classes,
-                                        s=cfg.SOLVER.COSINE_SCALE, m=cfg.SOLVER.COSINE_MARGIN)
-        else:
-            self.classifier = nn.Linear(self.in_planes, self.num_classes, bias=False)
-            self.classifier.apply(weights_init_classifier)
 
         self.bottleneck = nn.BatchNorm1d(self.in_planes)
         self.bottleneck.bias.requires_grad_(False)
@@ -258,20 +207,12 @@ class build_transformer(nn.Module):
         global_feat = self.base(x, cam_label=cam_label)
 
         feat = self.bottleneck(global_feat)
-        if self.training:
-            if self.ID_LOSS_TYPE in ('arcface', 'cosface', 'amsoftmax', 'circle'):
-                cls_score = self.classifier(feat, label)
-            else:
-                cls_score = self.classifier(feat)
-
-            return cls_score, global_feat  # global feature for triplet loss
+        if self.neck_feat == 'after':
+            #  print("Test with feature after BN")
+            return feat
         else:
-            if self.neck_feat == 'after':
-                #  print("Test with feature after BN")
-                return feat
-            else:
-                #  print("Test with feature before BN")
-                return global_feat
+            #  print("Test with feature before BN")
+            return global_feat
 
     def load_param(self, trained_path):
         param_dict = torch.load(trained_path,map_location='cpu')

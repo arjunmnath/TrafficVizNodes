@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Script to prepopulate Chroma DB with ReID crop embeddings from reid_crops_cleaned."""
+"""Script to prepopulate Chroma DB with ReID crop embeddings from v1."""
 
 import argparse
 import json
@@ -32,18 +32,18 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description=(
             "Prepopulate Chroma DB with SigLIP2 embeddings computed from the "
-            "precomputed ReID crops stored in reid_crops_cleaned. "
-            "Each subdirectory of reid_crops_cleaned is named after the global person ID "
+            "precomputed ReID crops stored in v1. "
+            "Each subdirectory of v1 is named after the global person ID "
             "and contains bounding-box crop images from the CCTV footage."
         )
     )
     parser.add_argument(
         "--crops_dir",
         type=str,
-        default=str(workspace_root / "reid_crops_cleaned"),
+        default=str(workspace_root / "v1"),
         help=(
             "Root directory of ReID crops. Must contain one subdirectory per global person ID "
-            "(e.g. reid_crops_cleaned/42/clip1_f000001_t1_s0.04.jpg)."
+            "(e.g. v1/42/clip1_f000001_t1_s0.04.jpg)."
         ),
     )
     parser.add_argument(

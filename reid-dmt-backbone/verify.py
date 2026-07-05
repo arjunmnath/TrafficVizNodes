@@ -104,8 +104,13 @@ def extract_reid_crops(
         video_path = video_dir / video_name
 
         if not video_path.exists():
-            print(f"[WARNING] Missing video: {video_path}")
-            continue
+            # Fallback check under reid-dmt-backbone
+            fallback_path = Path("reid-dmt-backbone") / video_dir / video_name
+            if fallback_path.exists():
+                video_path = fallback_path
+            else:
+                print(f"[WARNING] Missing video: {video_path}")
+                continue
 
         cap = cv2.VideoCapture(str(video_path))
 
@@ -183,8 +188,8 @@ def extract_reid_crops(
 
 if __name__ == "__main__":
     extract_reid_crops(
-        json_path="reid_test_results.json",
+        json_path="reid_test_resultsv22.json",
         video_dir="input_vids",
-        output_dir="reid_crops_cleaned",
-        min_time_gap_seconds=2.0,
+        output_dir="v1",
+        min_time_gap_seconds=3.0,
     )

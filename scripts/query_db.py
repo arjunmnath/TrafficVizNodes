@@ -46,7 +46,7 @@ def camera_id_from_clip(clip_name: str) -> str:
 
 def find_crop_path(track_id: int, camera_id: str, camera_timestamp: float) -> str:
     """Locate the local crop path in the workspace matching the metadata."""
-    crops_dir = workspace_root / "reid_crops_cleaned" / str(track_id)
+    crops_dir = workspace_root / "v1" / str(track_id)
     if not crops_dir.exists():
         return "Not found"
 
