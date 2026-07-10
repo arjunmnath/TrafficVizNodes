@@ -2,10 +2,15 @@ import torch
 import numpy as np
 
 
-def get_default_device() -> str:
-    """Returns 'cuda' if GPU is available, otherwise 'cpu'."""
-    return "cuda" if torch.cuda.is_available() else "cpu"
+def get_device(device):
+    if device != "auto":
+        return torch.device(device)
 
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
 
 def compute_distance_matrix(
     qf: torch.Tensor, gf: torch.Tensor, metric: str = "euclidean"

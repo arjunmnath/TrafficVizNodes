@@ -32,7 +32,7 @@ services:
       # Use Dockerfile.camera.gpu and uncomment deploy block for GPU inference
     volumes:
       - ./dataset:/app/dataset:ro
-      - ./agent-working/trained_models:/app/models:ro
+      - ./trained_models:/app/models:ro
     command: >
       --camera_id cam_1
       --video_source /app/dataset/test/S06/c041/vdo.avi
@@ -57,7 +57,7 @@ services:
       dockerfile: Dockerfile.camera
     volumes:
       - ./dataset:/app/dataset:ro
-      - ./agent-working/trained_models:/app/models:ro
+      - ./trained_models:/app/models:ro
     command: >
       --camera_id cam_2
       --video_source /app/dataset/test/S06/c042/vdo.avi

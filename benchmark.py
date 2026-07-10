@@ -60,7 +60,7 @@ def parse_args():
     parser.add_argument(
         "--reid_model_path",
         type=str,
-        default="agent-working/trained_models/101a_384/v1/resnet101_ibn_a_2.pth",
+        default="trained_models/101a_384/v1/resnet101_ibn_a_2.pth",
         help="Path to trained .pth weights",
     )
     parser.add_argument(
@@ -77,7 +77,7 @@ def parse_args():
     parser.add_argument(
         "--yolo_model",
         type=str,
-        default="yolov8s.pt",
+        default="trained_models/yolov8s.pt",
         help="Path to YOLOv8 model file",
     )
     return parser.parse_args()

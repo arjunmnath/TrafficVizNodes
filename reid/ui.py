@@ -19,7 +19,8 @@ from rich.live import Live
 from rich.layout import Layout
 from rich import box
 
-from reid_pipeline import ReIDPipelineListener, SimpleRegistry
+from .utils import ReIDPipelineListener
+from .registry import SimpleRegistry
 
 console = Console()
 
@@ -31,6 +32,7 @@ class RichUIListener(ReIDPipelineListener):
         self.recent_logs = []
         self.live = None
         self.status = None
+        self.current_video_idx = 1
 
         # Viewport scrolling parameters
         self.registry_offset = 0
@@ -143,6 +145,8 @@ class RichUIListener(ReIDPipelineListener):
     def on_video_start(
         self, video_path: str, video_idx: int, total_videos: int, total_frames: int, fps: float
     ):
+        video_idx = self.current_video_idx
+        total_videos = len(self.video_paths)
         self.live = Live(auto_refresh=False)
         self.live.start()
         self.start_keyboard_listener()
@@ -159,6 +163,8 @@ class RichUIListener(ReIDPipelineListener):
         registry: SimpleRegistry,
         log_message: str | None = None,
     ):
+        video_idx = self.current_video_idx
+        total_videos = len(self.video_paths)
         if log_message:
             self.recent_logs.append(log_message)
             if len(self.recent_logs) > 100:
@@ -355,9 +361,13 @@ class RichUIListener(ReIDPipelineListener):
 
             memory_lines = []
             memory_lines.append("\n  [bold yellow]CPU & System Usage:[/bold yellow]")
-            memory_lines.append(f"    System CPU:     [white]{sys_cpu:.1f}%[/white] ({sys_cores} cores)")
+            memory_lines.append(
+                f"    System CPU:     [white]{sys_cpu:.1f}%[/white] ({sys_cores} cores)"
+            )
             memory_lines.append(f"    Process CPU:    [white]{process_cpu:.1f}%[/white]")
-            memory_lines.append(f"    System RAM:     [white]{sys_used_gb:.1f}/{sys_total_gb:.1f} GB[/white] ([cyan]{sys_pct:.1f}%[/cyan])")
+            memory_lines.append(
+                f"    System RAM:     [white]{sys_used_gb:.1f}/{sys_total_gb:.1f} GB[/white] ([cyan]{sys_pct:.1f}%[/cyan])"
+            )
 
             # Simple progress bar for system RAM load
             sys_bar_width = 20
@@ -385,10 +395,18 @@ class RichUIListener(ReIDPipelineListener):
                 cuda_allocated = torch.cuda.memory_allocated(device_idx) / (1024 * 1024)
                 cuda_reserved = torch.cuda.memory_reserved(device_idx) / (1024 * 1024)
 
-                alloc_val, alloc_unit = (cuda_allocated / 1024, "GB") if cuda_allocated >= 1024 else (cuda_allocated, "MB")
-                res_val, res_unit = (cuda_reserved / 1024, "GB") if cuda_reserved >= 1024 else (cuda_reserved, "MB")
+                alloc_val, alloc_unit = (
+                    (cuda_allocated / 1024, "GB")
+                    if cuda_allocated >= 1024
+                    else (cuda_allocated, "MB")
+                )
+                res_val, res_unit = (
+                    (cuda_reserved / 1024, "GB") if cuda_reserved >= 1024 else (cuda_reserved, "MB")
+                )
 
-                memory_lines.append(f"    Allocated:      [white]{alloc_val:.1f} {alloc_unit}[/white]")
+                memory_lines.append(
+                    f"    Allocated:      [white]{alloc_val:.1f} {alloc_unit}[/white]"
+                )
                 memory_lines.append(f"    Reserved:       [white]{res_val:.1f} {res_unit}[/white]")
 
             # Check MPS
@@ -399,11 +417,21 @@ class RichUIListener(ReIDPipelineListener):
                     mps_allocated = torch.mps.current_allocated_memory() / (1024 * 1024)
                     mps_driver = torch.mps.driver_allocated_memory() / (1024 * 1024)
 
-                    alloc_val, alloc_unit = (mps_allocated / 1024, "GB") if mps_allocated >= 1024 else (mps_allocated, "MB")
-                    driver_val, driver_unit = (mps_driver / 1024, "GB") if mps_driver >= 1024 else (mps_driver, "MB")
+                    alloc_val, alloc_unit = (
+                        (mps_allocated / 1024, "GB")
+                        if mps_allocated >= 1024
+                        else (mps_allocated, "MB")
+                    )
+                    driver_val, driver_unit = (
+                        (mps_driver / 1024, "GB") if mps_driver >= 1024 else (mps_driver, "MB")
+                    )
 
-                    memory_lines.append(f"    Allocated:      [white]{alloc_val:.1f} {alloc_unit}[/white]")
-                    memory_lines.append(f"    Driver Alloc:   [white]{driver_val:.1f} {driver_unit}[/white]")
+                    memory_lines.append(
+                        f"    Allocated:      [white]{alloc_val:.1f} {alloc_unit}[/white]"
+                    )
+                    memory_lines.append(
+                        f"    Driver Alloc:   [white]{driver_val:.1f} {driver_unit}[/white]"
+                    )
                 except Exception as ex:
                     memory_lines.append(f"    Error:          [red]{ex}[/red]")
 
@@ -494,6 +522,7 @@ class HeadlessUIListener(ReIDPipelineListener):
     def __init__(self, video_paths):
         self.video_paths = video_paths
         self.video_names = [os.path.basename(vp) for vp in video_paths]
+        self.current_video_idx = 1
 
     def show_configuration(self, config_data: dict):
         print("=== ReID Pipeline Configuration ===")
@@ -515,6 +544,8 @@ class HeadlessUIListener(ReIDPipelineListener):
     def on_video_start(
         self, video_path: str, video_idx: int, total_videos: int, total_frames: int, fps: float
     ):
+        video_idx = self.current_video_idx
+        total_videos = len(self.video_paths)
         video_name = os.path.basename(video_path)
         print(
             f"[{time.strftime('%H:%M:%S')}] [VIDEO START] Processing video {video_idx}/{total_videos}: {video_name} (Total frames: {total_frames}, FPS: {fps:.1f})"
@@ -532,6 +563,8 @@ class HeadlessUIListener(ReIDPipelineListener):
         registry: SimpleRegistry,
         log_message: str | None = None,
     ):
+        video_idx = self.current_video_idx
+        total_videos = len(self.video_paths)
         if log_message:
             # Strip rich markups for clean text output
             clean_log = re.sub(r"\[/?[a-zA-Z0-9 =_#]+\]", "", log_message)

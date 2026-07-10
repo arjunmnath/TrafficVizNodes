@@ -3,6 +3,8 @@ import sys
 import types
 import collections.abc
 
+from .utils import get_device
+
 # Mock torch._six to support newer PyTorch versions (PyTorch 2.x+)
 torch_six_mock = types.ModuleType("torch._six")
 torch_six_mock.container_abcs = collections.abc
@@ -10,12 +12,7 @@ sys.modules["torch._six"] = torch_six_mock
 
 import torch
 
-# Ensure repository root is in sys.path so we can import model and other components
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if REPO_ROOT not in sys.path:
-    sys.path.insert(0, REPO_ROOT)
-
-from model.make_model import make_model
+from ..model.make_model import make_model
 from .config import InferenceConfig
 
 
@@ -38,7 +35,7 @@ def build_model_from_config(config: InferenceConfig) -> torch.nn.Module:
         model.load_param(config.checkpoint_path)
 
     # Place on device
-    device = torch.device(config.device)
+    device = torch.device(get_device(config.device))
     model = model.to(device)
 
     # Set to evaluation mode

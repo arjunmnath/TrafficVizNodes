@@ -1,0 +1,19 @@
+# Enhanced ByteTrack defaults for mode="track"
+# Extends standard ByteTrack with an appearance-based association cost
+
+tracker_type: bytetrackx # (str) Tracker backend: bytetrackx
+track_high_thresh: 0.5 # (float) First-stage match threshold; raise for cleaner tracks, lower to keep more
+track_low_thresh: 0.1 # (float) Second-stage threshold for low-score matches; balances recovery vs drift
+new_track_thresh: 0.6 # (float) Start a new track if no match ≥ this; higher reduces false tracks
+track_buffer: 30 # (int) Frames to keep lost tracks alive; higher handles occlusion, increases ID switches risk
+match_thresh: 0.8 # (float) Association similarity threshold (IoU/cost); tune with detector quality
+fuse_score: True # (bool) Fuse detection score with motion/IoU for matching; stabilizes weak detections
+
+# Cost fusion weights (must sum to 1.0)
+iou_weight: 0.75 # (float) Weight for Intersection over Union (IoU) cost matrix
+appearance_weight: 0.25 # (float) Weight for Appearance (ReID feature cosine distance) cost matrix
+
+# ReID model related settings
+with_reid: True # (bool) Enable ReID model use; needs extra model and compute
+model: auto # (str) ReID model name/path; "auto" uses detector features if available
+ema_alpha: 0.9 # (float) Blending factor for appearance feature exponential moving average (0.9 retains history)

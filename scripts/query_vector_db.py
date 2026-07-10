@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Dry-run inference script: query the prepopulated ChromaDB and display top-K results.
+"""
+Vector database search runner querying Chroma DB using natural language, filtering candidates, and performing Florence-2 VQA matching.
 
 Usage examples:
-    poetry run python scripts/query_db.py "person in red jacket"
-    poetry run python scripts/query_db.py "man with backpack near camera 1" --top_k 5
-    poetry run python scripts/query_db.py "blue shirt" --top_k 10 --no-filters
+    poetry run python scripts/query_vector_db.py "person in red jacket"
+    poetry run python scripts/query_vector_db.py "man with backpack near camera 1" --top_k 5
+    poetry run python scripts/query_vector_db.py "blue shirt" --top_k 10 --no-filters
 """
 
 import argparse
@@ -46,7 +47,7 @@ def camera_id_from_clip(clip_name: str) -> str:
 
 def find_crop_path(track_id: int, camera_id: str, camera_timestamp: float) -> str:
     """Locate the local crop path in the workspace matching the metadata."""
-    crops_dir = workspace_root / "v1" / str(track_id)
+    crops_dir = workspace_root / "reid" / "v1" / str(track_id)
     if not crops_dir.exists():
         return "Not found"
 

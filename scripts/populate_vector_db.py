@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Script to prepopulate Chroma DB with ReID crop embeddings from v1."""
+"""
+Database prepopulation coordinator that encodes extracted crop images using SigLIP2 and stores embeddings in the Chroma vector store.
+Imports tracking metadata and saves associated embeddings into database collections.
+"""
 
 import argparse
 import json
@@ -40,7 +43,7 @@ def parse_args():
     parser.add_argument(
         "--crops_dir",
         type=str,
-        default=str(workspace_root / "v1"),
+        default=str(workspace_root / "reid" / "v1"),
         help=(
             "Root directory of ReID crops. Must contain one subdirectory per global person ID "
             "(e.g. v1/42/clip1_f000001_t1_s0.04.jpg)."
@@ -49,7 +52,7 @@ def parse_args():
     parser.add_argument(
         "--reid_json",
         type=str,
-        default=str(workspace_root / "reid-dmt-backbone" / "cleaned_reid.json"),
+        default=str(workspace_root / "reid" / "cleaned_reid.json"),
         help=(
             "Optional path to cleaned_reid.json for enriching metadata with bbox and class_label. "
             "If the file is absent, metadata is derived entirely from the directory/filename."

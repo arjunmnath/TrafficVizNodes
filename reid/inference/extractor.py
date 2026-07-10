@@ -6,6 +6,7 @@ from .loader import resolve_checkpoints_and_configs
 from .model_factory import build_model_from_config
 from .preprocessing import preprocess_images
 from .ensemble import fuse_embeddings
+from .utils import get_device
 
 
 class EnsembleReID:
@@ -18,12 +19,12 @@ class EnsembleReID:
         device: str = "cuda",
         fp16: bool = True,
     ):
-        self.device = device
+        self.device = device if device != "auto" else get_device(device)
         self.fp16 = fp16
 
         # Resolve configurations
         self.configs = resolve_checkpoints_and_configs(
-            model_dir=model_dir, model_paths=model_paths, device=device, fp16=fp16
+            model_dir=model_dir, model_paths=model_paths, device=self.device, fp16=fp16
         )
 
         # Load all models

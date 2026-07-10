@@ -1,31 +1,63 @@
 #!/usr/bin/env python3
 """
-Test script to run vehicle/person ReID on two input videos using the DMT backbone.
+Pipeline runner to perform cross-video person and vehicle re-identification tracking using YOLOv8 detectors and ResNet features.
 Maintains a simple global registry tracking occurrences of unique identities.
-Refactored to support both headless mode (for servers) and UI mode (for live monitoring).
+Supports both headless mode (for servers) and UI mode (for live monitoring).
 """
 
 import os
 import sys
+import json
 import argparse
+import numpy as np
 
-# Setup sys.path for DMT imports
-dmt_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "src"))
-if dmt_path not in sys.path:
-    sys.path.insert(0, dmt_path)
+# Add workspace root to python path to import app modules
+script_dir = os.path.dirname(os.path.abspath(__file__))
+workspace_root = os.path.abspath(os.path.join(script_dir, ".."))
+if workspace_root not in sys.path:
+    sys.path.insert(0, workspace_root)
 
-from reid_pipeline import ReIDPipeline, resolve_path, get_device
-from reid_ensemble_pipeline import EnsembleReIDPipeline
-from reid_ui import RichUIListener, HeadlessUIListener
+from reid import (
+    ReIDPipeline,
+    SimpleRegistry,
+    RichUIListener,
+    HeadlessUIListener,
+    resolve_path,
+    VideoFeederStage,
+    SamplerStage,
+    YoloDetectionStage,
+    SingleModelFeatureStage,
+    EnsembleModelFeatureStage,
+    TrackingStage,
+)
+
+
+def export_results(registry: SimpleRegistry, output_path: str) -> None:
+    """Export the registry results to JSON and embeddings to NPZ, outside pipeline scope.
+
+    Args:
+        registry (SimpleRegistry): The global identity registry.
+        output_path (str): Output path for JSON summary.
+    """
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+
+    summary = registry.get_results_summary()
+    with open(output_path, "w") as f:
+        json.dump(summary, f, indent=4)
+
+    embeddings = registry.get_embeddings_dict()
+    if embeddings:
+        npz_path = os.path.splitext(output_path)[0] + ".npz"
+        np.savez(npz_path, **embeddings)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Test ReID on two videos using DMT backbone")
     parser.add_argument(
-        "--video1", type=str, default="input_vids/clip1.mp4", help="Path to first video file"
+        "--video1", type=str, required=True, help="Path to first video file"
     )
     parser.add_argument(
-        "--video2", type=str, default="input_vids/clip2.mp4", help="Path to second video file"
+        "--video2", type=str, required=True, help="Path to second video file"
     )
     parser.add_argument(
         "--weights",
@@ -34,9 +66,9 @@ def main():
         help="Path to trained model weights checkpoint (for single model)",
     )
     parser.add_argument(
-        "--yolo_model", type=str, default="yolov8s.pt", help="Path to YOLOv8 model file"
+        "--yolo_model", type=str, default="trained_models/yolov8s.pt", help="Path to YOLOv8 model file"
     )
-    parser.add_argument("--threshold", type=float, default=0.6, help="ReID matching threshold")
+    parser.add_argument("--threshold", type=float, default=0.5, help="ReID matching threshold")
     parser.add_argument(
         "--output", type=str, required=True, help="Output path for JSON summary of occurrences"
     )
@@ -94,16 +126,21 @@ def main():
         help="Disable FP16 half-precision inference for ensemble",
     )
 
+    parser.add_argument(
+        "--tracker",
+        type=str,
+        default="bytetrack.yaml",
+        help="Tracker configuration filename (e.g. bytetrack.yaml, botsort.yaml) or custom config YAML path",
+    )
+
     args = parser.parse_args()
 
     # Resolve paths
     script_dir = os.path.dirname(os.path.abspath(__file__))
+    workspace_root = os.path.abspath(os.path.join(script_dir, ".."))
 
     video1_path = os.path.abspath(args.video1)
     video2_path = os.path.abspath(args.video2)
-
-    weights_path = resolve_path(args.weights, script_dir)
-    yolo_path = resolve_path(args.yolo_model, script_dir)
 
     output_path = os.path.abspath(args.output)
 
@@ -115,26 +152,24 @@ def main():
     else:
         listener = RichUIListener(videos)
 
-    # Determine device
-    device_to_show = args.device if args.device != "auto" else get_device()
-
     # Show configuration
     config_data = {
         "Video Sources": videos,
-        "YOLO Model": yolo_path,
+        "YOLO Model": args.yolo_model,
         "ReID Threshold": f"{args.threshold:.2f}",
-        "Device": str(device_to_show),
+        "Device": str(args.device),
         "Max Frames": str(args.max_frames) if args.max_frames > 0 else "All",
         "Sample FPS": str(args.sample_fps) if args.sample_fps > 0 else "Full FPS",
         "Output Path": output_path,
         "Pipeline Mode": "Ensemble" if args.ensemble else "Single Model",
+        "YOLO Tracker": args.tracker,
     }
 
     if args.ensemble:
         model_paths = None
         if args.model_paths:
-            model_paths = [resolve_path(p.strip(), script_dir) for p in args.model_paths.split(",")]
-        model_dir = resolve_path(args.model_dir, script_dir)
+            model_paths = [resolve_path(p.strip(), workspace_root) for p in args.model_paths.split(",")]
+        model_dir = resolve_path(args.model_dir, workspace_root)
 
         if args.model_paths:
             config_data["Ensemble Model Paths"] = args.model_paths
@@ -143,37 +178,57 @@ def main():
         config_data["Ensemble Fusion"] = args.fusion
         config_data["FP16 Enabled"] = str(args.fp16)
     else:
-        config_data["DMT Weights"] = weights_path
+        config_data["DMT Weights"] = args.weights
 
     listener.show_configuration(config_data)
 
-    # Create and execute the pipeline
+    # Create the stages for the Pipeline pattern
     if args.ensemble:
-        pipeline = EnsembleReIDPipeline(
+        feature_stage = EnsembleModelFeatureStage(
             model_dir=model_dir,
             model_paths=model_paths,
-            yolo_path=yolo_path,
-            threshold=args.threshold,
             device=args.device,
-            max_frames=args.max_frames,
-            sample_fps=args.sample_fps,
-            output_path=output_path,
             fp16=args.fp16,
             fusion=args.fusion,
         )
     else:
-        pipeline = ReIDPipeline(
-            weights_path=weights_path,
-            yolo_path=yolo_path,
-            threshold=args.threshold,
+        feature_stage = SingleModelFeatureStage(
+            weights_path=args.weights,
             device=args.device,
-            max_frames=args.max_frames,
-            sample_fps=args.sample_fps,
-            output_path=output_path,
         )
 
+    stages = [
+        VideoFeederStage(),
+        SamplerStage(sample_fps=args.sample_fps, time_based=False),
+        YoloDetectionStage(yolo_path=args.yolo_model),
+        feature_stage,
+        TrackingStage(tracker_config=args.tracker)
+    ]
+
+    # Create a shared registry across all pipeline runs
+    registry = SimpleRegistry(match_threshold=args.threshold)
+
+    pipeline = ReIDPipeline(
+        stages=stages,
+        threshold=args.threshold,
+        max_frames=args.max_frames,
+        registry=registry,
+    )
+
+    feeder_stage = stages[0]  # VideoFeederStage
+
     pipeline.initialize(listener)
-    pipeline.run(videos, listener)
+
+    for idx, video in enumerate(videos):
+        feeder_stage.set_video_path(video)
+        if listener:
+            listener.current_video_idx = idx + 1
+        pipeline.run(listener)
+
+    # Export results outside the pipeline scope
+    export_results(registry, output_path)
+    if listener:
+        listener.on_pipeline_end(registry, output_path)
 
 
 if __name__ == "__main__":

@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
-"""Single script to dry-run the inference node pipeline in memory.
-
-It loads the cropped images from v1, encodes them with SigLIP2,
-stores all embeddings in memory, and enters an interactive loop to wait for
-user query inputs. For each query, it filters/searches in memory and reranks
-candidates using Florence-2 VQA.
+"""
+Interactive terminal demo application to test SigLIP2 semantic search and Florence-2 VQA crop reranking.
+Loads cropped identity images, encodes them in memory, and provides an interactive search interface for testing queries.
 """
 
 import argparse
@@ -52,13 +49,13 @@ def parse_args():
     parser.add_argument(
         "--crops_dir",
         type=str,
-        default=str(workspace_root / "v1"),
+        default=str(workspace_root / "reid" / "v1"),
         help="Root directory of ReID crops.",
     )
     parser.add_argument(
         "--reid_json",
         type=str,
-        default=str(workspace_root / "reid-dmt-backbone" / "cleaned_reid.json"),
+        default=str(workspace_root / "reid" / "cleaned_reid.json"),
         help="Path to cleaned_reid.json for bbox / class label lookup.",
     )
     parser.add_argument(

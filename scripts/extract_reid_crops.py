@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+"""
+Image crop extractor to retrieve bounding-box crops of person and vehicle identities from video sources using tracking JSON outputs.
+Filters occurrences by a minimum time gap threshold to extract diverse representation crops for each identity.
+"""
+
 import argparse
 import json
 import sys
@@ -25,6 +30,7 @@ from rich.progress import (
 from rich import box
 
 MIN_TIME_GAP_SECONDS = 3.0
+workspace_root = Path(__file__).resolve().parent.parent
 
 
 def should_keep_detections(
@@ -81,6 +87,7 @@ def extract_reid_crops(
     output_dir: str,
     min_time_gap_seconds: float = MIN_TIME_GAP_SECONDS,
     headless: bool = False,
+    global_ids: list[int] | None = None,
 ) -> None:
     json_path = Path(json_path)
     video_dir = Path(video_dir)
@@ -139,10 +146,19 @@ def extract_reid_crops(
     if isinstance(data, list):
         data = {str(item["global_id"]): item.get("occurrences", []) for item in data}
 
+    if global_ids:
+        target_ids = set(str(gid) for gid in global_ids)
+        data = {gid: occs for gid, occs in data.items() if gid in target_ids}
+        log_event("FILTER", f"Filtered to only keep global IDs: {global_ids}", "green")
+
     raw_det_count = sum(len(occs) for occs in data.values())
     stats["Raw Detections"] = raw_det_count
     stats["Unique IDs"] = len(data)
-    log_event("SYSTEM", f"Loaded [green]{len(data)}[/green] identities with [green]{raw_det_count}[/green] raw occurrences.", "cyan")
+    log_event(
+        "SYSTEM",
+        f"Loaded [green]{len(data)}[/green] identities with [green]{raw_det_count}[/green] raw occurrences.",
+        "cyan",
+    )
 
     data = should_keep_detections(
         data,
@@ -151,7 +167,11 @@ def extract_reid_crops(
 
     filtered_det_count = sum(len(occs) for occs in data.values())
     stats["Filtered Detections"] = filtered_det_count
-    log_event("FILTER", f"Filtered occurrences to [green]{filtered_det_count}[/green] (gap threshold: [green]{min_time_gap_seconds}s[/green]).", "green")
+    log_event(
+        "FILTER",
+        f"Filtered occurrences to [green]{filtered_det_count}[/green] (gap threshold: [green]{min_time_gap_seconds}s[/green]).",
+        "green",
+    )
 
     # Count IDs with crops in both V1 and V2
     all_vids = {det["video"] for occurrences in data.values() for det in occurrences}
@@ -234,7 +254,9 @@ def extract_reid_crops(
         for k, v in config_info.items():
             cfg_tbl.add_row(k, str(v))
 
-        stats_tbl = Table(title="[bold yellow]Statistics[/bold yellow]", box=box.ROUNDED, expand=True)
+        stats_tbl = Table(
+            title="[bold yellow]Statistics[/bold yellow]", box=box.ROUNDED, expand=True
+        )
         stats_tbl.add_column("Metric", style="yellow")
         stats_tbl.add_column("Count", style="white", justify="right")
         for k, v in stats.items():
@@ -317,7 +339,7 @@ def extract_reid_crops(
                 live_instance.update(generate_layout())
 
             if not video_path.exists():
-                fallback_path = Path("reid-dmt-backbone") / video_dir / video_name
+                fallback_path = workspace_root / "reid" / video_dir.name / video_name
                 if fallback_path.exists():
                     video_path = fallback_path
                 else:
@@ -417,7 +439,10 @@ def extract_reid_crops(
                 stats["Extracted Crops"] += 1
 
                 # Avoid log spam for crops, log every 10 crops
-                if stats["Extracted Crops"] % 10 == 0 or stats["Extracted Crops"] == filtered_det_count:
+                if (
+                    stats["Extracted Crops"] % 10 == 0
+                    or stats["Extracted Crops"] == filtered_det_count
+                ):
                     log_event(
                         "CROP",
                         f"Saved crop for ID {global_id} (Total: {stats['Extracted Crops']})",
@@ -474,21 +499,21 @@ if __name__ == "__main__":
         "--json_path",
         "-j",
         type=str,
-        default="temp.json",
+        required=True,
         help="Path to the JSON file containing tracking occurrences.",
     )
     parser.add_argument(
         "--video_dir",
         "-v",
         type=str,
-        default="input_vids",
+        required=True,
         help="Directory containing the input video files.",
     )
     parser.add_argument(
         "--output_dir",
         "-o",
         type=str,
-        default="v1",
+        required=True,
         help="Directory to save the extracted crops.",
     )
     parser.add_argument(
@@ -499,6 +524,13 @@ if __name__ == "__main__":
         help="Minimum time gap in seconds between kept detections of the same identity.",
     )
     parser.add_argument(
+        "--global_ids",
+        type=int,
+        nargs="+",
+        default=None,
+        help="List of global IDs to produce crops for (default: all IDs).",
+    )
+    parser.add_argument(
         "--headless",
         action="store_true",
         help="Enable headless mode (disable fullscreen Live TUI, print plain text logs).",
@@ -506,18 +538,18 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Resolve paths relative to script directory if not found in current directory
+    # Resolve paths relative to workspace root if not found in current directory
     script_dir = Path(__file__).resolve().parent
 
     json_path = Path(args.json_path)
     if not json_path.exists():
-        fallback_json = script_dir / args.json_path
+        fallback_json = workspace_root / args.json_path
         if fallback_json.exists():
             json_path = fallback_json
 
     video_dir = Path(args.video_dir)
     if not video_dir.exists():
-        fallback_video_dir = script_dir / args.video_dir
+        fallback_video_dir = workspace_root / args.video_dir
         if fallback_video_dir.exists():
             video_dir = fallback_video_dir
 
@@ -529,4 +561,5 @@ if __name__ == "__main__":
         output_dir=str(output_dir),
         min_time_gap_seconds=args.min_time_gap,
         headless=args.headless,
+        global_ids=args.global_ids,
     )
