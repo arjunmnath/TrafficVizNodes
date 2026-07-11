@@ -31,17 +31,24 @@ class OfflineAddToRegistryStage(PipelineStage):
         # Resolve feed name from the feeder stage
         from reid.stages.video_feeder import VideoFeederStage
         from reid.stages.live_feeder import LiveFootageFeedStage
+
         feeder_stage = next(
-            (s for s in pipeline.stages if isinstance(s, (VideoFeederStage, LiveFootageFeedStage))), None
+            (s for s in pipeline.stages if isinstance(s, (VideoFeederStage, LiveFootageFeedStage))),
+            None,
         )
-        feed_name = feeder_stage.video_name if feeder_stage and hasattr(feeder_stage, "video_name") else ""
+        feed_name = (
+            feeder_stage.video_name if feeder_stage and hasattr(feeder_stage, "video_name") else ""
+        )
 
         # Resolve class label lookup from detector stage
         from reid.stages.detection import YoloDetectionStage
+
         yolo_stage = next((s for s in pipeline.stages if isinstance(s, YoloDetectionStage)), None)
 
         # Fallback feature dimension
-        feat_dim = data.features.shape[1] if data.features is not None and len(data.features) > 0 else 2048
+        feat_dim = (
+            data.features.shape[1] if data.features is not None and len(data.features) > 0 else 2048
+        )
 
         for t in data.tracks:
             # track layout: [x1, y1, x2, y2, track_id, score, class_id, detection_idx]

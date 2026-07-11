@@ -12,6 +12,7 @@ class SimpleRegistry:
 @dataclass
 class FrameData:
     """Dataclass holding context payload data passed through the pipeline stages."""
+
     frame: Optional[np.ndarray] = None
     frame_count: int = 0
     feed_name: str = ""
@@ -30,11 +31,11 @@ class FrameData:
     listener: Optional[Any] = None
 
     # Pipeline output fields populated by stages
-    boxes: Optional[np.ndarray] = None      # shape (N, 4)
-    scores: Optional[np.ndarray] = None     # shape (N,)
-    classes: Optional[np.ndarray] = None    # shape (N,)
-    features: Optional[np.ndarray] = None   # shape (N, D)
-    tracks: Optional[np.ndarray] = None     # shape (M, 8)
+    boxes: Optional[np.ndarray] = None  # shape (N, 4)
+    scores: Optional[np.ndarray] = None  # shape (N,)
+    classes: Optional[np.ndarray] = None  # shape (N,)
+    features: Optional[np.ndarray] = None  # shape (N, D)
+    tracks: Optional[np.ndarray] = None  # shape (M, 8)
 
     def __repr__(self):
         return f"FrameData(frame_count={self.frame_count}, feed_name={self.feed_name}, total_frames={self.total_frames}, timestamp={self.timestamp}, classes={self.classes}, features={self.features.shape if self.features is not None else None}, tracks={self.tracks.shape if self.tracks is not None else None})"
@@ -81,7 +82,7 @@ class ReIDPipelineListener:
         pass
 
 
-def has_minimum_roi_area(bbox: np.ndarray, frame_shape: tuple, threshold:float = 3e-3) -> bool:
+def has_minimum_roi_area(bbox: np.ndarray, frame_shape: tuple, threshold: float = 3e-3) -> bool:
     """Validate if the crop bounding box meets size constraints.
 
     Args:
@@ -95,7 +96,7 @@ def has_minimum_roi_area(bbox: np.ndarray, frame_shape: tuple, threshold:float =
     w = x2 - x1
     h = y2 - y1
     W, H, _ = frame_shape
-    return (w * h) / (W * H) > threshold 
+    return (w * h) / (W * H) > threshold
 
 
 def resolve_path(p: str, base_dir: str) -> str:

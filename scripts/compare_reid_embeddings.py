@@ -149,7 +149,9 @@ def main() -> None:
             target_ids.append(str(args.id2))
 
     if not target_ids:
-        console.print("[bold red]Error: No global IDs specified. Please use --ids, or --id1/--id2.[/bold red]")
+        console.print(
+            "[bold red]Error: No global IDs specified. Please use --ids, or --id1/--id2.[/bold red]"
+        )
         sys.exit(1)
 
     # Resolve input JSON path
@@ -178,7 +180,9 @@ def main() -> None:
     available_ids = sorted(list(by_id.keys()), key=lambda x: int(x) if x.isdigit() else x)
     for gid in target_ids:
         if gid not in by_id:
-            console.print(f"[bold red]Error: Global ID '{gid}' not found in the dataset.[/bold red]")
+            console.print(
+                f"[bold red]Error: Global ID '{gid}' not found in the dataset.[/bold red]"
+            )
             console.print(f"Available IDs: {available_ids}")
             sys.exit(1)
 
@@ -197,10 +201,14 @@ def main() -> None:
 
         embs, labels = extract_embeddings_and_labels(occs, gid, embeddings_dict)
         n = len(embs)
-        console.print(f"[bold green]Global ID {gid}:[/bold green] Found {n} occurrences with embeddings.")
+        console.print(
+            f"[bold green]Global ID {gid}:[/bold green] Found {n} occurrences with embeddings."
+        )
 
         if n == 0:
-            console.print(f"[bold red]Error: Global ID '{gid}' has zero occurrences with embeddings.[/bold red]")
+            console.print(
+                f"[bold red]Error: Global ID '{gid}' has zero occurrences with embeddings.[/bold red]"
+            )
             sys.exit(1)
 
         all_embeddings_list.append(embs)
@@ -215,7 +223,9 @@ def main() -> None:
     similarity_matrix = compute_pairwise_cosine_similarity(all_embeddings)
 
     # Helper to calculate stats excluding diagonal for self-similarities
-    def get_stats(matrix: np.ndarray, exclude_diag: bool = False) -> tuple[float, float, float, float]:
+    def get_stats(
+        matrix: np.ndarray, exclude_diag: bool = False
+    ) -> tuple[float, float, float, float]:
         if matrix.size == 0:
             return 0.0, 0.0, 0.0, 0.0
         if exclude_diag and matrix.shape[0] == matrix.shape[1]:
@@ -303,12 +313,16 @@ def main() -> None:
 
     # Only show labels if there aren't too many occurrences
     if total_occs <= 60:
-        ax.set_xticklabels(all_labels, rotation=90, ha="right", fontsize=max(4, 12 - total_occs // 5))
+        ax.set_xticklabels(
+            all_labels, rotation=90, ha="right", fontsize=max(4, 12 - total_occs // 5)
+        )
         ax.set_yticklabels(all_labels, fontsize=max(4, 12 - total_occs // 5))
     else:
         ax.set_xticklabels([])
         ax.set_yticklabels([])
-        console.print("[yellow]Warning: Too many occurrences (>60). Skipping individual tick labels on heatmap.[/yellow]")
+        console.print(
+            "[yellow]Warning: Too many occurrences (>60). Skipping individual tick labels on heatmap.[/yellow]"
+        )
 
     # Annotate cell values if the total occurrences are very small
     if total_occs <= 20:
@@ -317,7 +331,16 @@ def main() -> None:
                 val = similarity_matrix[i, j]
                 # Choose text color dynamically for contrast
                 color = "white" if val < (vmin + (1.0 - vmin) / 2.0) else "black"
-                ax.text(j, i, f"{val:.2f}", ha="center", va="center", color=color, fontsize=8, weight="bold")
+                ax.text(
+                    j,
+                    i,
+                    f"{val:.2f}",
+                    ha="center",
+                    va="center",
+                    color=color,
+                    fontsize=8,
+                    weight="bold",
+                )
 
     # Add background boxes/text annotations for regions on the heatmap
     for gid in target_ids:
@@ -347,9 +370,31 @@ def main() -> None:
         center1 = start1 + n1 / 2.0 - 0.5
         center2 = start2 + n2 / 2.0 - 0.5
         # Inter label top-right
-        ax.text(center2, center1, "Inter Similarity", color="black", fontsize=12, ha="center", va="center", alpha=0.35, weight="bold", style="italic")
+        ax.text(
+            center2,
+            center1,
+            "Inter Similarity",
+            color="black",
+            fontsize=12,
+            ha="center",
+            va="center",
+            alpha=0.35,
+            weight="bold",
+            style="italic",
+        )
         # Inter label bottom-left
-        ax.text(center1, center2, "Inter Similarity", color="black", fontsize=12, ha="center", va="center", alpha=0.35, weight="bold", style="italic")
+        ax.text(
+            center1,
+            center2,
+            "Inter Similarity",
+            color="black",
+            fontsize=12,
+            ha="center",
+            va="center",
+            alpha=0.35,
+            weight="bold",
+            style="italic",
+        )
 
     # Title & Colorbar
     ids_title_str = ", ".join(target_ids)
@@ -372,7 +417,9 @@ def main() -> None:
     plt.savefig(output_path, bbox_inches="tight", facecolor="white")
     plt.close()
 
-    console.print(f"\n[bold green]Success![/bold green] Saved similarity heatmap to: [cyan]{output_path.resolve()}[/cyan]\n")
+    console.print(
+        f"\n[bold green]Success![/bold green] Saved similarity heatmap to: [cyan]{output_path.resolve()}[/cyan]\n"
+    )
 
 
 if __name__ == "__main__":

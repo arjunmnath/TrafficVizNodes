@@ -38,6 +38,7 @@ class EnhancedSTrack(STrack):
             feat (np.ndarray): The new appearance feature vector.
         """
         from ultralytics.trackers.utils.reid import smooth_feature
+
         curr, smooth = smooth_feature(feat, self.smooth_feat, self.alpha)
         if curr is not None:
             self.curr_feat, self.smooth_feat = curr, smooth
@@ -78,13 +79,14 @@ class EnhancedByteTracker(BYTETracker):
             args (Any): Track settings configuration namespace.
         """
         super().__init__(args)
-        
+
         # Load ReID feature encoder (reusing standard build_encoder helper)
         from ultralytics.trackers.utils.reid import build_encoder
+
         self.encoder = build_encoder(
             with_reid=False,
             model=getattr(args, "model", "auto"),
-            device=getattr(args, "device", None)
+            device=getattr(args, "device", None),
         )
 
         # Initialize modular cost handlers
@@ -94,6 +96,7 @@ class EnhancedByteTracker(BYTETracker):
         # Read cost weights from args
         self.iou_weight = getattr(args, "iou_weight", 0.7)
         self.appearance_weight = getattr(args, "appearance_weight", 0.3)
+
     @classmethod
     def setup_predictor(cls, predictor: Any) -> None:
         """Register detection pre-hook to extract features when using model='auto'.
@@ -122,7 +125,9 @@ class EnhancedByteTracker(BYTETracker):
                 def pre_hook(module, input):
                     predictor._feats = list(input[0])  # unroll input tensors to prevent mutation
 
-                predictor._hook = predictor.model.model.model[-1].register_forward_pre_hook(pre_hook)
+                predictor._hook = predictor.model.model.model[-1].register_forward_pre_hook(
+                    pre_hook
+                )
                 predictor._feats = None  # Initialize _feats state
 
     def extract_features(self, frame: np.ndarray, bboxes: np.ndarray) -> Optional[List[np.ndarray]]:
@@ -158,7 +163,7 @@ class EnhancedByteTracker(BYTETracker):
         """
         if len(results) == 0:
             return []
-        
+
         bboxes = parse_bboxes(results)
         features = self.extract_features(img, bboxes)
 
@@ -170,7 +175,9 @@ class EnhancedByteTracker(BYTETracker):
             tracks.append(track)
         return tracks
 
-    def get_dists(self, tracks: List[EnhancedSTrack], detections: List[EnhancedSTrack]) -> np.ndarray:
+    def get_dists(
+        self, tracks: List[EnhancedSTrack], detections: List[EnhancedSTrack]
+    ) -> np.ndarray:
         """Compute the combined cost matrix using custom weights and CostFusion.
 
         Args:
@@ -200,15 +207,9 @@ class EnhancedByteTracker(BYTETracker):
             missing_mask = None
 
         # 3. Combine matrices using CostFusion module
-        costs = {
-            "iou": iou_cost,
-            "appearance": appearance_cost
-        }
-        weights = {
-            "iou": self.iou_weight,
-            "appearance": self.appearance_weight
-        }
-        
+        costs = {"iou": iou_cost, "appearance": appearance_cost}
+        weights = {"iou": self.iou_weight, "appearance": self.appearance_weight}
+
         fused_cost = CostFusion.combine(costs, weights)
         # Override missing feature pairs to pure iou_cost
         if missing_mask is not None:

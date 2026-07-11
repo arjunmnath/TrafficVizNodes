@@ -5,6 +5,7 @@ TrajectoryFusionStage: aggregates per-frame detection embeddings for a terminate
 track into a single representative feature vector using either mean fusion or
 scaled dot-product self-attention fusion.
 """
+
 from __future__ import annotations
 
 from typing import Literal
@@ -18,6 +19,7 @@ from reid.postprocessing.pipeline import TerminatedTrack
 # ──────────────────────────────────────────────────────────────────────────────
 # Fusion functions
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def _l2_normalize(v: np.ndarray) -> np.ndarray:
     """L2-normalize along the last axis."""
@@ -73,10 +75,10 @@ def attention_fusion(embeddings: np.ndarray, temperature: float = 1.0) -> np.nda
     # Softmax over key dimension (axis=-1) per query
     scores -= scores.max(axis=-1, keepdims=True)  # numerical stability
     attn = np.exp(scores)
-    attn /= attn.sum(axis=-1, keepdims=True)      # (N, N)
+    attn /= attn.sum(axis=-1, keepdims=True)  # (N, N)
 
     # Weighted sum of values (using unnormalized embeddings as values)
-    attended = attn @ embeddings   # (N, D)
+    attended = attn @ embeddings  # (N, D)
 
     # Mean-pool attended outputs and normalize
     return _l2_normalize(attended.mean(axis=0))

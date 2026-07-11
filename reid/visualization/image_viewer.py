@@ -2,6 +2,7 @@
 """
 This module contains an image viewer and drawing routines based on OpenCV.
 """
+
 from typing import Optional, Tuple, Callable, Any
 import numpy as np
 import cv2
@@ -99,7 +100,9 @@ class ImageViewer(object):
 
     """
 
-    def __init__(self, update_ms: int, window_shape: Tuple[int, int] = (640, 480), caption: str = "Figure 1") -> None:
+    def __init__(
+        self, update_ms: int, window_shape: Tuple[int, int] = (640, 480), caption: str = "Figure 1"
+    ) -> None:
         self._window_shape = window_shape
         self._caption = caption
         self._update_ms = update_ms
@@ -107,7 +110,7 @@ class ImageViewer(object):
         self._user_fun: Callable[[], bool] = lambda: True
         self._terminate = False
 
-        self.image = np.zeros(self._window_shape + (3, ), dtype=np.uint8)
+        self.image = np.zeros(self._window_shape + (3,), dtype=np.uint8)
         self._color: Tuple[int, int, int] = (0, 0, 0)
         self.text_color: Tuple[int, int, int] = (255, 255, 255)
         self.thickness = 1
@@ -122,7 +125,9 @@ class ImageViewer(object):
             raise ValueError("color must be tuple of 3")
         self._color = tuple(int(c) for c in value)  # type: ignore[assignment]
 
-    def rectangle(self, x: float, y: float, w: float, h: float, label: Optional[str] = None) -> None:
+    def rectangle(
+        self, x: float, y: float, w: float, h: float, label: Optional[str] = None
+    ) -> None:
         """Draw a rectangle.
 
         Parameters
@@ -144,15 +149,20 @@ class ImageViewer(object):
         pt2 = int(x + w), int(y + h)
         cv2.rectangle(self.image, pt1, pt2, self._color, self.thickness)
         if label is not None:
-            text_size = cv2.getTextSize(
-                label, cv2.FONT_HERSHEY_PLAIN, 1, self.thickness)
+            text_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 1, self.thickness)
 
             center = pt1[0] + 5, pt1[1] + 5 + text_size[0][1]
-            pt2 = pt1[0] + 10 + text_size[0][0], pt1[1] + 10 + \
-                text_size[0][1]
+            pt2 = pt1[0] + 10 + text_size[0][0], pt1[1] + 10 + text_size[0][1]
             cv2.rectangle(self.image, pt1, pt2, self._color, -1)
-            cv2.putText(self.image, label, center, cv2.FONT_HERSHEY_PLAIN,
-                        1, (255, 255, 255), self.thickness)
+            cv2.putText(
+                self.image,
+                label,
+                center,
+                cv2.FONT_HERSHEY_PLAIN,
+                1,
+                (255, 255, 255),
+                self.thickness,
+            )
 
     def circle(self, x: float, y: float, radius: float, label: Optional[str] = None) -> None:
         """Draw a circle.
@@ -170,21 +180,22 @@ class ImageViewer(object):
 
         """
         image_size = int(radius + self.thickness + 1.5)  # actually half size
-        roi = int(x - image_size), int(y - image_size), \
-            int(2 * image_size), int(2 * image_size)
+        roi = int(x - image_size), int(y - image_size), int(2 * image_size), int(2 * image_size)
         if not is_in_bounds(self.image, roi):
             return
 
         image = view_roi(self.image, roi)
         center = image.shape[1] // 2, image.shape[0] // 2
-        cv2.circle(
-            image, center, int(radius + .5), self._color, self.thickness)
+        cv2.circle(image, center, int(radius + 0.5), self._color, self.thickness)
         if label is not None:
-            cv2.putText(
-                self.image, label, center, cv2.FONT_HERSHEY_PLAIN,
-                2, self.text_color, 2)
+            cv2.putText(self.image, label, center, cv2.FONT_HERSHEY_PLAIN, 2, self.text_color, 2)
 
-    def gaussian(self, mean: np.ndarray[Any, Any], covariance: np.ndarray[Any, Any], label: Optional[str] = None) -> None:
+    def gaussian(
+        self,
+        mean: np.ndarray[Any, Any],
+        covariance: np.ndarray[Any, Any],
+        label: Optional[str] = None,
+    ) -> None:
         """Draw 95% confidence ellipse of a 2-D Gaussian distribution.
 
         Parameters
@@ -202,14 +213,12 @@ class ImageViewer(object):
         indices = vals.argsort()[::-1]
         vals, vecs = np.sqrt(vals[indices]), vecs[:, indices]
 
-        center = int(mean[0] + .5), int(mean[1] + .5)
-        axes = int(vals[0] + .5), int(vals[1] + .5)
-        angle = int(180. * np.arctan2(vecs[1, 0], vecs[0, 0]) / np.pi)
-        cv2.ellipse(
-            self.image, center, axes, angle, 0, 360, self._color, 2)
+        center = int(mean[0] + 0.5), int(mean[1] + 0.5)
+        axes = int(vals[0] + 0.5), int(vals[1] + 0.5)
+        angle = int(180.0 * np.arctan2(vecs[1, 0], vecs[0, 0]) / np.pi)
+        cv2.ellipse(self.image, center, axes, angle, 0, 360, self._color, 2)
         if label is not None:
-            cv2.putText(self.image, label, center, cv2.FONT_HERSHEY_PLAIN,
-                        2, self.text_color, 2)
+            cv2.putText(self.image, label, center, cv2.FONT_HERSHEY_PLAIN, 2, self.text_color, 2)
 
     def annotate(self, x: float, y: float, text: str) -> None:
         """Draws a text string at a given location.
@@ -224,10 +233,16 @@ class ImageViewer(object):
             The text to be drawn.
 
         """
-        cv2.putText(self.image, text, (int(x), int(y)), cv2.FONT_HERSHEY_PLAIN,
-                    2, self.text_color, 2)
+        cv2.putText(
+            self.image, text, (int(x), int(y)), cv2.FONT_HERSHEY_PLAIN, 2, self.text_color, 2
+        )
 
-    def colored_points(self, points: np.ndarray[Any, Any], colors: Optional[np.ndarray[Any, Any]] = None, skip_index_check: bool = False) -> None:
+    def colored_points(
+        self,
+        points: np.ndarray[Any, Any],
+        colors: Optional[np.ndarray[Any, Any]] = None,
+        skip_index_check: bool = False,
+    ) -> None:
         """Draw a collection of points.
 
         The point size is fixed to 1.
@@ -251,14 +266,14 @@ class ImageViewer(object):
             indices = np.logical_and.reduce((cond1, cond2, cond3, cond4))
             points = points[indices, :]
         if colors is None:
-            colors = np.repeat(
-                self._color, len(points)).reshape(3, len(points)).T
-        indices = (points + .5).astype(int)
+            colors = np.repeat(self._color, len(points)).reshape(3, len(points)).T
+        indices = (points + 0.5).astype(int)
         self.image[indices[:, 1], indices[:, 0], :] = colors
 
-    def enable_videowriter(self, output_filename: str, fourcc_string: str = "MJPG",
-                           fps: Optional[float] = None) -> None:
-        """ Write images to video file.
+    def enable_videowriter(
+        self, output_filename: str, fourcc_string: str = "MJPG", fps: Optional[float] = None
+    ) -> None:
+        """Write images to video file.
 
         Parameters
         ----------
@@ -274,13 +289,11 @@ class ImageViewer(object):
         """
         fourcc = getattr(cv2, "VideoWriter_fourcc")(*fourcc_string)
         if fps is None:
-            fps = int(1000. / self._update_ms)
-        self._video_writer = cv2.VideoWriter(
-            output_filename, fourcc, fps, self._window_shape)
+            fps = int(1000.0 / self._update_ms)
+        self._video_writer = cv2.VideoWriter(output_filename, fourcc, fps, self._window_shape)
 
     def disable_videowriter(self) -> None:
-        """ Disable writing videos.
-        """
+        """Disable writing videos."""
         self._video_writer = None
 
     def run(self, update_fun: Optional[Callable[[], bool]] = None) -> None:
@@ -305,12 +318,10 @@ class ImageViewer(object):
             if not is_paused:
                 self._terminate = not self._user_fun()
                 if self._video_writer is not None:
-                    self._video_writer.write(
-                        cv2.resize(self.image, self._window_shape))
+                    self._video_writer.write(cv2.resize(self.image, self._window_shape))
             t1 = time.time()
-            remaining_time = max(1, int(self._update_ms - 1e3*(t1-t0)))
-            cv2.imshow(
-                self._caption, cv2.resize(self.image, self._window_shape[:2]))
+            remaining_time = max(1, int(self._update_ms - 1e3 * (t1 - t0)))
+            cv2.imshow(self._caption, cv2.resize(self.image, self._window_shape[:2]))
             key = cv2.waitKey(remaining_time)
             if key & 255 == 27:  # ESC
                 print("terminating")

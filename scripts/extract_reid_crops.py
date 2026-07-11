@@ -167,10 +167,12 @@ def extract_reid_crops(
 
     # Connected components using Union-Find to group matched tracks
     parent = {}
+
     def find(x):
         if parent[x] != x:
             parent[x] = find(parent[x])
         return parent[x]
+
     def union(x, y):
         rx = find(x)
         ry = find(y)
@@ -185,7 +187,9 @@ def extract_reid_crops(
     node_similarity = {}
 
     if matches_path and Path(matches_path).exists():
-        log_event("SYSTEM", f"Loading matches from matches JSON: [cyan]{matches_path}[/cyan]", "cyan")
+        log_event(
+            "SYSTEM", f"Loading matches from matches JSON: [cyan]{matches_path}[/cyan]", "cyan"
+        )
         try:
             with open(matches_path, "r") as f:
                 matches_data = json.load(f)
@@ -193,7 +197,7 @@ def extract_reid_crops(
                 node_a = (match["feed_a"], match["track_a"])
                 node_b = (match["feed_b"], match["track_b"])
                 sim = match.get("similarity", 1.0)
-                
+
                 # Check if we have occurrences for both tracks
                 if node_a in tracks_map and node_b in tracks_map:
                     union(node_a, node_b)
@@ -571,7 +575,7 @@ def extract_reid_crops(
             expand=False,
         )
     )
-    
+
     return both_videos_ids
 
 

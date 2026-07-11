@@ -79,6 +79,7 @@ class Tracker:
         Can be overridden by subclasses or set as a callback function on instance.
         """
         raise ValueError("on_track_terminated hook is not attached.")
+
     def update(
         self,
         boxes: np.ndarray,
@@ -107,7 +108,7 @@ class Tracker:
             empty_detections = Detections(
                 xywh=np.empty((0, 4), dtype=np.float32),
                 conf=np.empty((0,), dtype=np.float32),
-                cls=np.empty((0,), dtype=np.int32)
+                cls=np.empty((0,), dtype=np.int32),
             )
             tracks = self.tracker.update(empty_detections, feats=np.empty((0, 0)))
         else:
@@ -115,8 +116,8 @@ class Tracker:
             xywh = np.empty_like(boxes, dtype=np.float32)
             xywh[:, 0] = (boxes[:, 0] + boxes[:, 2]) / 2.0  # Center x
             xywh[:, 1] = (boxes[:, 1] + boxes[:, 3]) / 2.0  # Center y
-            xywh[:, 2] = boxes[:, 2] - boxes[:, 0]          # Width
-            xywh[:, 3] = boxes[:, 3] - boxes[:, 1]          # Height
+            xywh[:, 2] = boxes[:, 2] - boxes[:, 0]  # Width
+            xywh[:, 3] = boxes[:, 3] - boxes[:, 1]  # Height
 
             # Wrap into mock detection object
             results = Detections(xywh=xywh, conf=scores, cls=classes)
@@ -129,7 +130,7 @@ class Tracker:
             for t in tracks:
                 track_id = int(t[4])
                 bbox = t[0:4].tolist()  # [x1, y1, x2, y2]
-                
+
                 if track_id not in self.track_history:
                     self.track_history[track_id] = {
                         "start_frame": frame_count,
@@ -152,9 +153,15 @@ class Tracker:
                 smooth_feat = None
                 for strack in getattr(self.tracker, "tracked_stracks", []):
                     if strack.track_id == track_id:
-                        if hasattr(strack, "smooth_feat") and getattr(strack, "smooth_feat") is not None:
+                        if (
+                            hasattr(strack, "smooth_feat")
+                            and getattr(strack, "smooth_feat") is not None
+                        ):
                             smooth_feat = getattr(strack, "smooth_feat")
-                        elif hasattr(strack, "curr_feat") and getattr(strack, "curr_feat") is not None:
+                        elif (
+                            hasattr(strack, "curr_feat")
+                            and getattr(strack, "curr_feat") is not None
+                        ):
                             smooth_feat = getattr(strack, "curr_feat")
                         break
                 if smooth_feat is not None:
@@ -166,7 +173,8 @@ class Tracker:
 
         # Trigger hook for any newly terminated tracks
         newly_removed = [
-            t for t in getattr(self.tracker, "removed_stracks", [])
+            t
+            for t in getattr(self.tracker, "removed_stracks", [])
             if t.track_id not in prev_removed_ids
         ]
         for track in newly_removed:

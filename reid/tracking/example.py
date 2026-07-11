@@ -29,7 +29,9 @@ def main() -> None:
         sys.exit(1)
 
     if not os.path.exists(model_path):
-        print(f"[-] YOLO weights not found at: {model_path}. Will let Ultralytics download model automatically.")
+        print(
+            f"[-] YOLO weights not found at: {model_path}. Will let Ultralytics download model automatically."
+        )
         model_path = "yolov8s.pt"
 
     print("[+] Initializing Detector class...")
@@ -86,7 +88,7 @@ def main() -> None:
                 boxes=dets["boxes"],
                 scores=dets["scores"],
                 classes=dets["classes"],
-                features=features
+                features=features,
             )
 
             # Draw tracked boxes on the frame
@@ -98,7 +100,7 @@ def main() -> None:
                 # Draw bounding box
                 color = (0, 255, 0)  # Green box
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                
+
                 # Annotate track ID
                 label = f"ID: {track_id}"
                 cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)

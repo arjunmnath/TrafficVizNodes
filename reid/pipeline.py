@@ -57,15 +57,12 @@ class ReIDPipeline:
         for stage in self.stages:
             stage.finalize(self)
 
-    def run(
-        self,
-        listener: ReIDPipelineListener = None
-    ) -> None:
+    def run(self, listener: ReIDPipelineListener = None) -> None:
         """Execute the pipeline. The input video stream is determined entirely by VideoFeederStage."""
         try:
             feeder_stage = next(
                 (s for s in self.stages if isinstance(s, (VideoFeederStage, LiveFootageFeedStage))),
-                None
+                None,
             )
 
             if feeder_stage:
@@ -73,7 +70,9 @@ class ReIDPipeline:
                 fps = feeder_stage.fps
                 total_frames = feeder_stage.total_frames
             else:
-                raise ValueError("A feeder stage (VideoFeederStage or LiveFootageFeedStage) is required to supply the input stream.")
+                raise ValueError(
+                    "A feeder stage (VideoFeederStage or LiveFootageFeedStage) is required to supply the input stream."
+                )
 
             if listener:
                 listener.on_video_start(feeder_stage.video_path, 1, 1, total_frames, fps)
@@ -91,11 +90,11 @@ class ReIDPipeline:
                     )
 
                     data.elapsed_time = time.time() - start_time
-                    try: 
+                    try:
                         for stage in self.stages:
                             data = stage.process(data, self)
 
-                    finally: 
+                    finally:
                         if not data.skip and not data.end_of_stream:
                             print(data)
                     if data.end_of_stream:

@@ -68,12 +68,8 @@ def export_results(registries: dict, output_path: str) -> None:
 
 def main():
     parser = argparse.ArgumentParser(description="Test ReID on two videos using DMT backbone")
-    parser.add_argument(
-        "--video1", type=str, required=True, help="Path to first video file"
-    )
-    parser.add_argument(
-        "--video2", type=str, required=True, help="Path to second video file"
-    )
+    parser.add_argument("--video1", type=str, required=True, help="Path to first video file")
+    parser.add_argument("--video2", type=str, required=True, help="Path to second video file")
     parser.add_argument(
         "--weights",
         type=str,
@@ -81,7 +77,10 @@ def main():
         help="Path to trained model weights checkpoint (for single model)",
     )
     parser.add_argument(
-        "--yolo_model", type=str, default="trained_models/yolov8s.pt", help="Path to YOLOv8 model file"
+        "--yolo_model",
+        type=str,
+        default="trained_models/yolov8s.pt",
+        help="Path to YOLOv8 model file",
     )
     parser.add_argument("--threshold", type=float, default=0.5, help="ReID matching threshold")
     parser.add_argument(
@@ -155,9 +154,9 @@ def main():
         choices=["mean", "attention", "none"],
         dest="fusion_mode",
         help="Trajectory fusion mode for the postprocessing pipeline: "
-             "'mean' = simple mean pooling, "
-             "'attention' = scaled dot-product self-attention, "
-             "'none' = disable postprocessing",
+        "'mean' = simple mean pooling, "
+        "'attention' = scaled dot-product self-attention, "
+        "'none' = disable postprocessing",
     )
 
     args = parser.parse_args()
@@ -195,7 +194,9 @@ def main():
     if args.ensemble:
         model_paths = None
         if args.model_paths:
-            model_paths = [resolve_path(p.strip(), workspace_root) for p in args.model_paths.split(",")]
+            model_paths = [
+                resolve_path(p.strip(), workspace_root) for p in args.model_paths.split(",")
+            ]
         model_dir = resolve_path(args.model_dir, workspace_root)
 
         if args.model_paths:
@@ -227,9 +228,11 @@ def main():
 
     # Build postprocessing pipeline
     if args.fusion_mode != "none":
-        postprocessing_pipeline = PostProcessingPipeline([
-            TrajectoryFusionStage(mode=args.fusion_mode),
-        ])
+        postprocessing_pipeline = PostProcessingPipeline(
+            [
+                TrajectoryFusionStage(mode=args.fusion_mode),
+            ]
+        )
     else:
         postprocessing_pipeline = None
 

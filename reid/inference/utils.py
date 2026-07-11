@@ -12,6 +12,7 @@ def get_device(device):
         return torch.device("mps")
     return torch.device("cpu")
 
+
 def compute_distance_matrix(
     qf: torch.Tensor, gf: torch.Tensor, metric: str = "euclidean"
 ) -> np.ndarray:

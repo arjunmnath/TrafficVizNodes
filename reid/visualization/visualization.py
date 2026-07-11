@@ -4,6 +4,7 @@ import colorsys
 from .image_viewer import ImageViewer
 from tqdm import tqdm  # type: ignore[import-untyped]
 
+
 def create_unique_color_float(tag: int, hue_step: float = 0.41) -> Tuple[float, float, float]:
     """Create a unique RGB color code for a given track id (tag).
 
@@ -24,8 +25,8 @@ def create_unique_color_float(tag: int, hue_step: float = 0.41) -> Tuple[float, 
         RGB color code in range [0, 1]
 
     """
-    h, v = (tag * hue_step) % 1, 1. - (int(tag * hue_step) % 4) / 5.
-    r, g, b = colorsys.hsv_to_rgb(h, 1., v)
+    h, v = (tag * hue_step) % 1, 1.0 - (int(tag * hue_step) % 4) / 5.0
+    r, g, b = colorsys.hsv_to_rgb(h, 1.0, v)
     return r, g, b
 
 
@@ -50,7 +51,7 @@ def create_unique_color_uchar(tag: int, hue_step: float = 0.41) -> Tuple[int, in
 
     """
     r, g, b = create_unique_color_float(tag, hue_step)
-    return int(255*r), int(255*g), int(255*b)
+    return int(255 * r), int(255 * g), int(255 * b)
 
 
 class NoVisualization(object):
@@ -77,7 +78,7 @@ class NoVisualization(object):
 
     def run(self, frame_callback: Callable[["NoVisualization", int], None]) -> None:
         start_frame = self.frame_idx
-        for frame_idx in tqdm(range(start_frame, self.last_idx+1)):
+        for frame_idx in tqdm(range(start_frame, self.last_idx + 1)):
             frame_callback(self, frame_idx)
             self.frame_idx += 1
 
@@ -92,7 +93,8 @@ class Visualization(object):
         aspect_ratio = float(image_shape[1]) / image_shape[0]
         image_shape_res = 1024, int(aspect_ratio * 1024)
         self.viewer = ImageViewer(
-            update_ms, image_shape_res, "Figure %s" % seq_info["sequence_name"])
+            update_ms, image_shape_res, "Figure %s" % seq_info["sequence_name"]
+        )
         self.viewer.thickness = 2
         self.frame_idx: int = seq_info["min_frame_idx"]
         self.last_idx: int = seq_info["max_frame_idx"]
@@ -115,8 +117,7 @@ class Visualization(object):
         for track_id, box in zip(track_ids, boxes):
             self.viewer.color = create_unique_color_uchar(track_id)
             self.viewer.rectangle(
-                int(box[0]), int(box[1]), int(box[2]), int(box[3]),
-                label=str(track_id)
+                int(box[0]), int(box[1]), int(box[2]), int(box[3]), label=str(track_id)
             )
 
     def draw_detections(self, detections: List[Any]) -> None:
@@ -124,9 +125,7 @@ class Visualization(object):
         self.viewer.color = (0, 0, 255)
         for i, detection in enumerate(detections):
             tlwh = detection.tlwh
-            self.viewer.rectangle(
-                float(tlwh[0]), float(tlwh[1]), float(tlwh[2]), float(tlwh[3])
-            )
+            self.viewer.rectangle(float(tlwh[0]), float(tlwh[1]), float(tlwh[2]), float(tlwh[3]))
 
     def draw_trackers(self, tracks: List[Any]) -> None:
         self.viewer.thickness = 2
@@ -136,8 +135,11 @@ class Visualization(object):
             self.viewer.color = create_unique_color_uchar(track.track_id)
             tlwh = track.to_tlwh()
             self.viewer.rectangle(
-                float(tlwh[0]), float(tlwh[1]), float(tlwh[2]), float(tlwh[3]),
-                label=str(track.track_id)
+                float(tlwh[0]),
+                float(tlwh[1]),
+                float(tlwh[2]),
+                float(tlwh[3]),
+                label=str(track.track_id),
             )
             # self.viewer.gaussian(track.mean[:2], track.covariance[:2, :2],
             #                      label="%d" % track.track_id)

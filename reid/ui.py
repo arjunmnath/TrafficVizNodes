@@ -618,7 +618,7 @@ class HeadlessUIListener(ReIDPipelineListener):
                     g_id = item["track_id"]
                     occs = item["occurrences"]
                     cls = occs[0]["class_label"] if occs else "unknown"
-                    
+
                     vid_counts: Dict[str, int] = {}
                     vid_frames: Dict[str, List[str]] = {}
                     for o in occs:
@@ -632,7 +632,12 @@ class HeadlessUIListener(ReIDPipelineListener):
                             vid_frames[v].append(f"F{frame} ({ts:.1f}s)")
 
                     source_info = " | ".join(
-                        [f"{v}: {c} occurrences [{', '.join(vid_frames[v])}]" for v, c in vid_counts.items()]
+                        [
+                            f"{v}: {c} occurrences [{', '.join(vid_frames[v])}]"
+                            for v, c in vid_counts.items()
+                        ]
                     )
-                    print(f"  Track {g_id:03d} ({cls}): {len(occs)} total occurrences | {source_info}")
+                    print(
+                        f"  Track {g_id:03d} ({cls}): {len(occs)} total occurrences | {source_info}"
+                    )
         print("=============================================\n")

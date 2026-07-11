@@ -33,53 +33,44 @@ def get_color(track_id: int) -> tuple[int, int, int]:
     return color  # type: ignore
 
 
-def draw_box(frame: np.ndarray, bbox: np.ndarray, label: str, color: tuple[int, int, int], thickness: int = 2) -> None:
+def draw_box(
+    frame: np.ndarray, bbox: np.ndarray, label: str, color: tuple[int, int, int], thickness: int = 2
+) -> None:
     """Draw a beautifully styled bounding box and label on the frame."""
     x1, y1, x2, y2 = map(int, bbox)
-    
+
     # Draw main bounding box rectangle
     cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
-    
+
     # Font setup
     font = cv2.FONT_HERSHEY_SIMPLEX
     font_scale = 0.5
     text_thickness = 1
-    
+
     # Get size of text
     (text_w, text_h), baseline = cv2.getTextSize(label, font, font_scale, text_thickness)
-    
+
     # Position text slightly above the box, or inside if too close to top edge
     text_y = y1 - 5 if y1 - 5 - text_h > 0 else y1 + text_h + 5
     text_x = x1
-    
+
     # Bound check position coordinates
     text_y = max(0, min(frame.shape[0] - 5, text_y))
     text_x = max(0, min(frame.shape[1] - text_w - 5, text_x))
-    
+
     # Draw background box for text to make it extremely readable
     cv2.rectangle(
-        frame,
-        (text_x, text_y - text_h - baseline),
-        (text_x + text_w, text_y + baseline),
-        color,
-        -1
+        frame, (text_x, text_y - text_h - baseline), (text_x + text_w, text_y + baseline), color, -1
     )
-    
+
     # Determine text color based on background brightness
     b, g, r = color
     luminance = 0.299 * r + 0.587 * g + 0.114 * b
     text_color = (0, 0, 0) if luminance > 128 else (255, 255, 255)
-    
+
     # Draw text label
     cv2.putText(
-        frame,
-        label,
-        (text_x, text_y),
-        font,
-        font_scale,
-        text_color,
-        text_thickness,
-        cv2.LINE_AA
+        frame, label, (text_x, text_y), font, font_scale, text_color, text_thickness, cv2.LINE_AA
     )
 
 
@@ -133,62 +124,64 @@ def parse_args() -> argparse.Namespace:
         default=-1,
         help="Maximum frames to process (-1 for full video). Useful for quick testing.",
     )
-    
+
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    
+
     # Check model path
     if not os.path.exists(args.model_path) and args.model_path == "trained_models/yolov8s.pt":
-        logger.info(f"YOLO model weight file {args.model_path} not found in path, will download automatically.")
-        
+        logger.info(
+            f"YOLO model weight file {args.model_path} not found in path, will download automatically."
+        )
+
     logger.info(f"Loading YOLO model from: {args.model_path}")
     model = YOLO(args.model_path)
-    
+
     # Open input video
     if not os.path.exists(args.video_path):
         logger.error(f"Input video file not found: {args.video_path}")
         sys.exit(1)
-        
+
     cap = cv2.VideoCapture(args.video_path)
     if not cap.isOpened():
         logger.error(f"Failed to open video file: {args.video_path}")
         sys.exit(1)
-        
+
     # Get video properties
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    
+
     # Set up classes list (if empty, set classes=None to track all classes)
     classes = args.classes if args.classes else None
-    
+
     # Determine frames to process
     frames_to_process = total_frames
     if args.max_frames > 0:
         frames_to_process = min(args.max_frames, total_frames)
-        
+
     logger.info(f"Input video resolution: {width}x{height} @ {fps:.2f} FPS")
     logger.info(f"Total video frames: {total_frames}, processing: {frames_to_process}")
     logger.info(f"Tracker configuration: {args.tracker}")
     logger.info(f"Tracking classes: {classes}")
-    
+
     # Initialize video writer
     output_dir = Path(args.output_path).parent
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Determine output codec based on extension
     ext = Path(args.output_path).suffix.lower()
     if ext == ".avi":
         fourcc = cv2.VideoWriter_fourcc(*"XVID")
     else:
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        
+
     out = cv2.VideoWriter(args.output_path, fourcc, fps, (width, height))
-    
+
     try:
         # Initialize tqdm progress bar
         with tqdm(total=frames_to_process, desc="Tracking progress") as pbar:
@@ -197,7 +190,7 @@ def main() -> None:
                 ret, frame = cap.read()
                 if not ret:
                     break
-                
+
                 # Perform tracking using YOLOv8
                 results = model.track(
                     source=frame,
@@ -207,7 +200,7 @@ def main() -> None:
                     classes=classes,
                     verbose=False,
                 )
-                
+
                 # Check results and annotate boxes
                 if results and len(results) > 0:
                     result = results[0]
@@ -215,21 +208,21 @@ def main() -> None:
                         boxes = result.boxes.xyxy.cpu().numpy()
                         track_ids = result.boxes.id.int().cpu().numpy()
                         cls_ids = result.boxes.cls.int().cpu().numpy()
-                        
+
                         for box, track_id, cls_id in zip(boxes, track_ids, cls_ids):
                             class_name = result.names[int(cls_id)]
                             label = f"{class_name} - {track_id}"
                             color = get_color(int(track_id))
                             draw_box(frame, box, label, color)
-                            
+
                 # Write the annotated frame to output video
                 out.write(frame)
-                
+
                 frame_idx += 1
                 pbar.update(1)
-                
+
         logger.info(f"Tracking finished. Output video saved to: {args.output_path}")
-        
+
     finally:
         cap.release()
         out.release()

@@ -31,12 +31,13 @@ import numpy as np
 # Data types
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 class TrackEntry(NamedTuple):
     feed: str
     track_id: int
     class_label: str
     n_occurrences: int
-    embedding: np.ndarray   # shape (D,) — aggregated prototype
+    embedding: np.ndarray  # shape (D,) — aggregated prototype
 
 
 class MatchResult(NamedTuple):
@@ -52,6 +53,7 @@ class MatchResult(NamedTuple):
 # ──────────────────────────────────────────────────────────────────────────────
 # Embedding helpers
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def l2_normalize(v: np.ndarray) -> np.ndarray:
     norm = np.linalg.norm(v)
@@ -86,6 +88,7 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
 # ──────────────────────────────────────────────────────────────────────────────
 # Loading
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def load_tracks(
     json_path: str,
@@ -128,7 +131,10 @@ def load_tracks(
             # NPZ key format: {feed_name}_{embedding_type}_{track_id}
             npz_key = f"{feed_name}_{embedding_type}_{track_id}"
             if npz_key not in npz:
-                print(f"  [warn] Missing embedding key '{npz_key}' in NPZ — skipping.", file=sys.stderr)
+                print(
+                    f"  [warn] Missing embedding key '{npz_key}' in NPZ — skipping.",
+                    file=sys.stderr,
+                )
                 continue
 
             embeddings = npz[npz_key].astype(np.float32)  # (N, D)
@@ -136,13 +142,15 @@ def load_tracks(
                 embeddings = embeddings[np.newaxis, :]
 
             prototype = aggregate_embeddings(embeddings, aggregation)
-            entries.append(TrackEntry(
-                feed=feed_name,
-                track_id=track_id,
-                class_label=class_label,
-                n_occurrences=len(occs),
-                embedding=prototype,
-            ))
+            entries.append(
+                TrackEntry(
+                    feed=feed_name,
+                    track_id=track_id,
+                    class_label=class_label,
+                    n_occurrences=len(occs),
+                    embedding=prototype,
+                )
+            )
 
         if entries:
             feed_tracks[feed_name] = entries
@@ -153,6 +161,7 @@ def load_tracks(
 # ──────────────────────────────────────────────────────────────────────────────
 # Matching
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def match_cross_camera(
     feed_tracks: Dict[str, List[TrackEntry]],
@@ -180,11 +189,17 @@ def match_cross_camera(
                     continue
                 sim = cosine_similarity(ta.embedding, tb.embedding)
                 if sim >= threshold:
-                    results.append(MatchResult(
-                        feed_a=feed_a, track_a=ta.track_id, class_a=ta.class_label,
-                        feed_b=feed_b, track_b=tb.track_id, class_b=tb.class_label,
-                        similarity=sim,
-                    ))
+                    results.append(
+                        MatchResult(
+                            feed_a=feed_a,
+                            track_a=ta.track_id,
+                            class_a=ta.class_label,
+                            feed_b=feed_b,
+                            track_b=tb.track_id,
+                            class_b=tb.class_label,
+                            similarity=sim,
+                        )
+                    )
 
     results.sort(key=lambda r: r.similarity, reverse=True)
     return results
@@ -193,6 +208,7 @@ def match_cross_camera(
 # ──────────────────────────────────────────────────────────────────────────────
 # Output
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def print_results(results: List[MatchResult], top_k: int) -> None:
     shown = results[:top_k] if top_k > 0 else results
@@ -241,33 +257,69 @@ def save_results(results: List[MatchResult], output_path: str) -> None:
 # CLI
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Cross-camera track ReID matching from pipeline output.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--json", required=True, metavar="PATH",
-                        help="Path to registry JSON produced by run_reid_pipeline.py")
-    parser.add_argument("--npz", required=True, metavar="PATH",
-                        help="Path to NPZ embeddings produced by run_reid_pipeline.py")
-    parser.add_argument("--threshold", type=float, default=0.5, metavar="FLOAT",
-                        help="Minimum cosine similarity to report a match")
-    parser.add_argument("--top-k", type=int, default=50, metavar="INT",
-                        help="Number of top matches to display (0 = all)")
-    parser.add_argument("--aggregation", choices=["mean", "max_pooling", "last"], default="mean",
-                        help="Method to aggregate per-frame embeddings into a track prototype")
-    parser.add_argument("--embedding-type", choices=["occ", "smooth"], default="smooth",
-                        help=(
-                            "Which embeddings to use for matching: "
-                            "'occ' = raw per-frame detection features; "
-                            "'smooth' = tracker moving-average features"
-                        ))
-    parser.add_argument("--class-filter", nargs="*", default=[], metavar="CLASS",
-                        help="Only compare tracks of these class labels, e.g. --class-filter person car")
-    parser.add_argument("--same-class-only", action="store_true",
-                        help="Only compare tracks with the same class label across cameras")
-    parser.add_argument("--output", metavar="PATH", default=None,
-                        help="Optional path to save match results as JSON")
+    parser.add_argument(
+        "--json",
+        required=True,
+        metavar="PATH",
+        help="Path to registry JSON produced by run_reid_pipeline.py",
+    )
+    parser.add_argument(
+        "--npz",
+        required=True,
+        metavar="PATH",
+        help="Path to NPZ embeddings produced by run_reid_pipeline.py",
+    )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=0.5,
+        metavar="FLOAT",
+        help="Minimum cosine similarity to report a match",
+    )
+    parser.add_argument(
+        "--top-k",
+        type=int,
+        default=50,
+        metavar="INT",
+        help="Number of top matches to display (0 = all)",
+    )
+    parser.add_argument(
+        "--aggregation",
+        choices=["mean", "max_pooling", "last"],
+        default="mean",
+        help="Method to aggregate per-frame embeddings into a track prototype",
+    )
+    parser.add_argument(
+        "--embedding-type",
+        choices=["occ", "smooth"],
+        default="smooth",
+        help=(
+            "Which embeddings to use for matching: "
+            "'occ' = raw per-frame detection features; "
+            "'smooth' = tracker moving-average features"
+        ),
+    )
+    parser.add_argument(
+        "--class-filter",
+        nargs="*",
+        default=[],
+        metavar="CLASS",
+        help="Only compare tracks of these class labels, e.g. --class-filter person car",
+    )
+    parser.add_argument(
+        "--same-class-only",
+        action="store_true",
+        help="Only compare tracks with the same class label across cameras",
+    )
+    parser.add_argument(
+        "--output", metavar="PATH", default=None, help="Optional path to save match results as JSON"
+    )
 
     args = parser.parse_args()
 
@@ -287,7 +339,10 @@ def main() -> None:
     )
 
     if len(feed_tracks) < 2:
-        print(f"Error: need at least 2 feeds for cross-camera matching, found {len(feed_tracks)}.", file=sys.stderr)
+        print(
+            f"Error: need at least 2 feeds for cross-camera matching, found {len(feed_tracks)}.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     total_tracks = sum(len(v) for v in feed_tracks.values())

@@ -56,13 +56,15 @@ class SimpleRegistry:
         entry = self.identities[local_track_id]
         entry["smooth_embeddings"].append(smooth_embedding)
         entry["occurrence_embeddings"].append(occurrence_embedding)
-        entry["occurrences"].append({
-            "class_label": class_label,
-            "feed_name": feed_name,
-            "frame": int(frame_number),
-            "timestamp_seconds": float(timestamp),
-            "bbox": list(map(float, bbox)) if bbox is not None else [],
-        })
+        entry["occurrences"].append(
+            {
+                "class_label": class_label,
+                "feed_name": feed_name,
+                "frame": int(frame_number),
+                "timestamp_seconds": float(timestamp),
+                "bbox": list(map(float, bbox)) if bbox is not None else [],
+            }
+        )
 
         return local_track_id
 

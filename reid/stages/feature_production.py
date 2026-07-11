@@ -99,7 +99,7 @@ class EnsembleModelFeatureStage(PipelineStage):
         model_paths: Optional[List[str]] = None,
         device: str = "cpu",
         fp16: bool = True,
-        fusion: str = "concat"
+        fusion: str = "concat",
     ):
         """Constructor.
 
@@ -112,7 +112,9 @@ class EnsembleModelFeatureStage(PipelineStage):
         """
         self.model_dir = model_dir
         self.model_paths = model_paths
-        self.device = device if device != "auto" else ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = (
+            device if device != "auto" else ("cuda" if torch.cuda.is_available() else "cpu")
+        )
         self.fp16 = fp16
         self.fusion = fusion
         self.ensemble = None
@@ -127,7 +129,9 @@ class EnsembleModelFeatureStage(PipelineStage):
             fp16=self.fp16,
         )
         if listener:
-            listener.on_init_status(f"Loaded {len(self.ensemble.models)} ensembled models successfully.")
+            listener.on_init_status(
+                f"Loaded {len(self.ensemble.models)} ensembled models successfully."
+            )
 
     def process(self, data: FrameData, pipeline: Any) -> FrameData:
         if data.skip or data.end_of_stream:
@@ -161,7 +165,9 @@ class EnsembleModelFeatureStage(PipelineStage):
             features.append(None)  # Placeholder
 
         if len(valid_crops) > 0:
-            embeddings_tensor = self.ensemble.extract_batch(valid_crops, is_bgr=True, fusion=self.fusion)
+            embeddings_tensor = self.ensemble.extract_batch(
+                valid_crops, is_bgr=True, fusion=self.fusion
+            )
             embeddings = embeddings_tensor.cpu().numpy()
             for embed_idx, orig_idx in enumerate(valid_idxs):
                 features[orig_idx] = embeddings[embed_idx]

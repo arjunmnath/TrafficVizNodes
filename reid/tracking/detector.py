@@ -19,7 +19,7 @@ class Detector:
         frame: np.ndarray,
         conf: float = 0.25,
         classes: Optional[List[int]] = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> Dict[str, np.ndarray]:
         """Perform object detection on a BGR image frame.
 
@@ -36,18 +36,14 @@ class Detector:
                 - "classes": np.ndarray of shape (N,)
         """
         results = self.model.predict(
-            source=frame,
-            conf=conf,
-            classes=classes,
-            verbose=False,
-            **kwargs
+            source=frame, conf=conf, classes=classes, verbose=False, **kwargs
         )
 
         if not results:
             return {
                 "boxes": np.empty((0, 4), dtype=np.float32),
                 "scores": np.empty((0,), dtype=np.float32),
-                "classes": np.empty((0,), dtype=np.int32)
+                "classes": np.empty((0,), dtype=np.int32),
             }
 
         result = results[0]
@@ -55,7 +51,7 @@ class Detector:
             return {
                 "boxes": np.empty((0, 4), dtype=np.float32),
                 "scores": np.empty((0,), dtype=np.float32),
-                "classes": np.empty((0,), dtype=np.int32)
+                "classes": np.empty((0,), dtype=np.int32),
             }
 
         # Convert to numpy arrays
@@ -63,8 +59,4 @@ class Detector:
         scores = result.boxes.conf.cpu().numpy()
         classes_array = result.boxes.cls.int().cpu().numpy()
 
-        return {
-            "boxes": boxes,
-            "scores": scores,
-            "classes": classes_array
-        }
+        return {"boxes": boxes, "scores": scores, "classes": classes_array}

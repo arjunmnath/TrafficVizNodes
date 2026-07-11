@@ -2,6 +2,7 @@
 reid/postprocessing/pipeline.py
 TerminatedTrack dataclass and PostProcessingPipeline executor.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -32,18 +33,19 @@ class TerminatedTrack:
         history: Raw track history dict from the Tracker (frames, timestamps, bboxes).
         extra: Arbitrary key-value store for downstream stages to attach data.
     """
+
     track_id: int
     class_label: str = "unknown"
     feed_name: str = ""
 
     # Raw per-frame embeddings collected by the registry during the track's lifetime
-    occurrence_embeddings: Optional[np.ndarray] = None   # shape (N, D)
+    occurrence_embeddings: Optional[np.ndarray] = None  # shape (N, D)
 
     # Tracker's final smoothed embedding at termination time
-    smooth_embedding: Optional[np.ndarray] = None        # shape (D,)
+    smooth_embedding: Optional[np.ndarray] = None  # shape (D,)
 
     # Set by TrajectoryFusionStage
-    fused_embedding: Optional[np.ndarray] = None         # shape (D,)
+    fused_embedding: Optional[np.ndarray] = None  # shape (D,)
 
     # Tracker history (frames, timestamps, bboxes)
     history: Optional[Dict[str, Any]] = None

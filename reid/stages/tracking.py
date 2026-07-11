@@ -53,6 +53,7 @@ class TrackingStage(PipelineStage):
                     occ_list = entry.get("occurrence_embeddings", [])
                     if occ_list:
                         import numpy as np
+
                         occurrence_embeddings = np.array(occ_list, dtype=np.float32)
                     # Pull feed_name and class_label from last occurrence record
                     occs = entry.get("occurrences", [])
