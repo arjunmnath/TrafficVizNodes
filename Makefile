@@ -35,7 +35,7 @@ format:
 	poetry run ruff format .
 
 typecheck:
-	poetry run mypy src tests examples benchmarks cookbook
+	poetry run mypy reid scripts 
 
 check: lint typecheck test
 

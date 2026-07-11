@@ -1,72 +1,92 @@
 import time
-from typing import Any
+from typing import Any, List, Optional
 from reid.stages.base import PipelineStage
 from reid.utils import ReIDPipelineListener, FrameData
 from reid.tracking.tracker import Tracker
 
 
 class TrackingStage(PipelineStage):
-    """Stage 3: Performs manual track association. Owns the Tracker.
+    """Performs manual track association. Owns the Tracker.
 
-    Registry updates happen only on track termination via the on_track_terminated hook,
-    not on every frame.
+    When a track is terminated the ``on_track_terminated`` hook fires.
+    If a ``postprocessing_pipeline`` is provided it is executed immediately
+    on that track before any other downstream logic.
     """
 
-    def __init__(self, tracker_config: str):
+    def __init__(
+        self,
+        tracker_config: str,
+        postprocessing_pipeline: Optional[Any] = None,
+    ):
         """Constructor.
 
         Args:
             tracker_config (str): Path to tracker configuration YAML.
+            postprocessing_pipeline: Optional PostProcessingPipeline to run on
+                each terminated track. If None, no postprocessing is performed.
         """
-        self.tracker_config = tracker_config
-        self.manual_tracker = None
+        self.tracker_config: str = tracker_config
+        self.manual_tracker: Tracker | None = None
+        self.postprocessing_pipeline: Optional[Any] = postprocessing_pipeline
 
-    def initialize(self, listener: ReIDPipelineListener = None) -> None:
+    def initialize(self, listener: ReIDPipelineListener | None = None) -> None:
         if listener:
             listener.on_init_status("Loading manual Tracker and configuration...")
         self.manual_tracker = Tracker(self.tracker_config)
 
     def _wire_termination_hook(self, pipeline: Any) -> None:
-        """Wire the on_track_terminated hook to register tracks into the pipeline registry."""
+        """Wire the on_track_terminated hook to run the postprocessing pipeline."""
+        from reid.postprocessing.pipeline import TerminatedTrack
 
-        def _on_terminated(track):
-            # The Tracker augments the track with .embedding from its internal store
-            embedding = getattr(track, "embedding", None)
-            if embedding is None:
-                return
+        postprocessing_pipeline = self.postprocessing_pipeline
 
-            class_id = int(track.cls)
-
-            # Look up the class label from YOLO detector
-            from reid.stages.detection import YoloDetectionStage
-            yolo_stage = next(
-                (s for s in pipeline.stages if isinstance(s, YoloDetectionStage)), None
-            )
+        def _on_terminated(track: Any) -> None:
+            # Resolve class label from track history if available
             class_label = "unknown"
-            if yolo_stage and yolo_stage.detector:
-                class_label = yolo_stage.detector.model.names.get(class_id, "unknown")
+            feed_name = ""
 
-            # Resolve feed_name from the VideoFeederStage
-            from reid.stages.video_feeder import VideoFeederStage
-            feeder_stage = next(
-                (s for s in pipeline.stages if isinstance(s, VideoFeederStage)), None
-            )
-            feed_name = feeder_stage.video_name if feeder_stage else ""
+            # Pull occurrence_embeddings from the registry for this track
+            occurrence_embeddings = None
+            if hasattr(pipeline, "registry") and pipeline.registry is not None:
+                entry = pipeline.registry.identities.get(track.track_id)
+                if entry is not None:
+                    occ_list = entry.get("occurrence_embeddings", [])
+                    if occ_list:
+                        import numpy as np
+                        occurrence_embeddings = np.array(occ_list, dtype=np.float32)
+                    # Pull feed_name and class_label from last occurrence record
+                    occs = entry.get("occurrences", [])
+                    if occs:
+                        feed_name = occs[-1].get("feed_name", "")
+                        class_label = occs[-1].get("class_label", "unknown")
 
-            global_id, similarity = pipeline.registry.register_track(
-                local_track_id=track.track_id,
-                embedding=embedding,
+            terminated = TerminatedTrack(
+                track_id=track.track_id,
                 class_label=class_label,
                 feed_name=feed_name,
+                occurrence_embeddings=occurrence_embeddings,
+                smooth_embedding=getattr(track, "embedding", None),
+                history=getattr(track, "history", None),
             )
+
+            if postprocessing_pipeline is not None:
+                terminated = postprocessing_pipeline.run(terminated)
+
+            # Store the postprocessed track back so downstream stages can read it
+            track.postprocessed = terminated
 
         self.manual_tracker.on_track_terminated = _on_terminated
 
     def process(self, data: FrameData, pipeline: Any) -> FrameData:
+        assert self.manual_tracker is not None, "tracker not initialized."
+
         # Wire hook on first call (lazy, after pipeline is fully set up)
-        if self.manual_tracker and not getattr(self.manual_tracker, "_hook_wired", False):
+        if not self.manual_tracker.hook_wired:
             self._wire_termination_hook(pipeline)
-            self.manual_tracker._hook_wired = True
+            self.manual_tracker.set_hook_wired(True)
+
+        # Calculate dynamic processing speed (frames per second) instead of static video frame rate
+        processing_fps = data.frame_count / data.elapsed_time if data.elapsed_time > 0.0 else 0.0
 
         if data.skip or data.end_of_stream:
             listener = data.listener
@@ -78,18 +98,24 @@ class TrackingStage(PipelineStage):
                     frame_count=data.frame_count,
                     total_frames=data.total_frames,
                     elapsed_time=data.elapsed_time,
-                    fps=data.fps,
+                    fps=processing_fps,
                     registry=pipeline.registry,
                 )
             return data
 
+        assert data.boxes is not None and data.scores is not None and data.classes is not None, (
+            "boxes, scores, and classes must not be None"
+        )
         # Run manual tracker update
         tracks = self.manual_tracker.update(
             boxes=data.boxes,
             scores=data.scores,
             classes=data.classes,
-            features=data.features
+            features=data.features,
+            frame_count=data.frame_count,
+            timestamp=data.timestamp,
         )
+        data.tracks = tracks
 
         listener = data.listener
 
@@ -108,9 +134,14 @@ class TrackingStage(PipelineStage):
                 frame_count=data.frame_count,
                 total_frames=data.total_frames,
                 elapsed_time=data.elapsed_time,
-                fps=data.fps,
+                fps=processing_fps,
                 registry=pipeline.registry,
                 log_message=log_line,
             )
 
         return data
+
+    def finalize(self, pipeline: Any) -> None:
+        if self.manual_tracker:
+            self.manual_tracker.terminate_all_tracks()
+            self.manual_tracker.reset()

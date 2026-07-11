@@ -1,9 +1,12 @@
+from typing import final
 import time
 from typing import List, Optional
 
 from reid.registry import SimpleRegistry
 from reid.utils import ReIDPipelineListener, FrameData
 from reid.stages.base import PipelineStage
+from reid.stages.video_feeder import VideoFeederStage
+from reid.stages.live_feeder import LiveFootageFeedStage
 
 
 class ReIDPipeline:
@@ -36,7 +39,7 @@ class ReIDPipeline:
         if registry is not None:
             self.registry = registry
         else:
-            self.registry = SimpleRegistry(match_threshold=threshold)
+            self.registry = SimpleRegistry()
 
     def initialize(self, listener: ReIDPipelineListener = None) -> None:
         """Initialize all stages sequentially."""
@@ -49,21 +52,28 @@ class ReIDPipeline:
         if listener:
             listener.on_init_end()
 
+    def finalize(self) -> None:
+        """Finalize all stages sequentially."""
+        for stage in self.stages:
+            stage.finalize(self)
+
     def run(
         self,
         listener: ReIDPipelineListener = None
     ) -> None:
         """Execute the pipeline. The input video stream is determined entirely by VideoFeederStage."""
-        from reid.stages.video_feeder import VideoFeederStage
         try:
-            feeder_stage = next((s for s in self.stages if isinstance(s, VideoFeederStage)), None)
+            feeder_stage = next(
+                (s for s in self.stages if isinstance(s, (VideoFeederStage, LiveFootageFeedStage))),
+                None
+            )
 
             if feeder_stage:
                 feeder_stage.initialize(listener)
                 fps = feeder_stage.fps
                 total_frames = feeder_stage.total_frames
             else:
-                raise ValueError("VideoFeederStage is required to supply the input video stream.")
+                raise ValueError("A feeder stage (VideoFeederStage or LiveFootageFeedStage) is required to supply the input stream.")
 
             if listener:
                 listener.on_video_start(feeder_stage.video_path, 1, 1, total_frames, fps)
@@ -81,16 +91,20 @@ class ReIDPipeline:
                     )
 
                     data.elapsed_time = time.time() - start_time
+                    try: 
+                        for stage in self.stages:
+                            data = stage.process(data, self)
 
-                    for stage in self.stages:
-                        data = stage.process(data, self)
-
+                    finally: 
+                        if not data.skip and not data.end_of_stream:
+                            print(data)
                     if data.end_of_stream:
                         break
 
                     if self.max_frames > 0 and data.frame_count >= self.max_frames:
                         break
             finally:
+                self.finalize()
                 feeder_stage.stop()
 
             if listener:

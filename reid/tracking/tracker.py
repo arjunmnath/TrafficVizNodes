@@ -1,7 +1,7 @@
 import os
 import yaml
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Optional, Union
 import numpy as np
 
 from ultralytics.utils import IterableSimpleNamespace
@@ -66,6 +66,10 @@ class Tracker:
         # Internal store: track_id -> latest appearance embedding
         self.track_embeddings: Dict[int, np.ndarray] = {}
 
+        # Internal store: track_id -> dict of track details/history
+        self.track_history: Dict[int, dict] = {}
+        self._hook_wired = False
+
     def on_track_terminated(self, track: Any) -> None:
         """Hook called when a track is terminated/removed.
 
@@ -74,14 +78,15 @@ class Tracker:
 
         Can be overridden by subclasses or set as a callback function on instance.
         """
-        pass
-
+        raise ValueError("on_track_terminated hook is not attached.")
     def update(
         self,
         boxes: np.ndarray,
         scores: np.ndarray,
         classes: np.ndarray,
-        features: Optional[np.ndarray] = None
+        features: Optional[np.ndarray] = None,
+        frame_count: int = 0,
+        timestamp: float = 0.0,
     ) -> np.ndarray:
         """Manually update track states using new frame detections and features.
 
@@ -119,13 +124,45 @@ class Tracker:
             # Call tracker update method, forwarding optional pre-extracted features
             tracks = self.tracker.update(results, feats=features)
 
-        # Update the internal track_id -> embedding mapping from active tracks
-        if features is not None and len(tracks) > 0:
+        # Update the internal track_id -> embedding mapping and track history from active tracks
+        if len(tracks) > 0:
             for t in tracks:
                 track_id = int(t[4])
-                det_idx = int(t[7])
-                if det_idx < len(features):
-                    self.track_embeddings[track_id] = features[det_idx].copy()
+                bbox = t[0:4].tolist()  # [x1, y1, x2, y2]
+                
+                if track_id not in self.track_history:
+                    self.track_history[track_id] = {
+                        "start_frame": frame_count,
+                        "start_timestamp": timestamp,
+                        "end_frame": frame_count,
+                        "end_timestamp": timestamp,
+                        "bboxes": [bbox],
+                        "frames": [frame_count],
+                        "timestamps": [timestamp],
+                    }
+                else:
+                    hist = self.track_history[track_id]
+                    hist["end_frame"] = frame_count
+                    hist["end_timestamp"] = timestamp
+                    hist["bboxes"].append(bbox)
+                    hist["frames"].append(frame_count)
+                    hist["timestamps"].append(timestamp)
+
+                # Try to get the smoothed features from the tracker's internal strack object if it supports appearance ReID
+                smooth_feat = None
+                for strack in getattr(self.tracker, "tracked_stracks", []):
+                    if strack.track_id == track_id:
+                        if hasattr(strack, "smooth_feat") and getattr(strack, "smooth_feat") is not None:
+                            smooth_feat = getattr(strack, "smooth_feat")
+                        elif hasattr(strack, "curr_feat") and getattr(strack, "curr_feat") is not None:
+                            smooth_feat = getattr(strack, "curr_feat")
+                        break
+                if smooth_feat is not None:
+                    self.track_embeddings[track_id] = smooth_feat.copy()
+                elif features is not None:
+                    det_idx = int(t[7])
+                    if det_idx < len(features):
+                        self.track_embeddings[track_id] = features[det_idx].copy()
 
         # Trigger hook for any newly terminated tracks
         newly_removed = [
@@ -133,8 +170,9 @@ class Tracker:
             if t.track_id not in prev_removed_ids
         ]
         for track in newly_removed:
-            # Augment the track object with the stored embedding
+            # Augment the track object with the stored embedding and history
             track.embedding = self.track_embeddings.pop(track.track_id, None)
+            track.history = self.track_history.pop(track.track_id, None)
             self.on_track_terminated(track)
 
         return tracks
@@ -143,3 +181,27 @@ class Tracker:
         """Reset the tracker state and IDs."""
         self.tracker.reset()
         self.track_embeddings.clear()
+        self.track_history.clear()
+
+    def terminate_all_tracks(self) -> None:
+        """Manually terminate all remaining active and lost tracks at the end of stream."""
+        remaining_tracks = []
+        if hasattr(self.tracker, "tracked_stracks"):
+            remaining_tracks.extend(self.tracker.tracked_stracks)
+        if hasattr(self.tracker, "lost_stracks"):
+            remaining_tracks.extend(self.tracker.lost_stracks)
+
+        for track in remaining_tracks:
+            # Only terminate if we haven't already processed it
+            embedding = self.track_embeddings.pop(track.track_id, None)
+            if embedding is not None:
+                track.embedding = embedding
+                track.history = self.track_history.pop(track.track_id, None)
+                self.on_track_terminated(track)
+
+    @property
+    def hook_wired(self):
+        return self._hook_wired
+
+    def set_hook_wired(self, hook_wired: bool) -> None:
+        self._hook_wired = hook_wired

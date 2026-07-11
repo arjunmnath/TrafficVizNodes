@@ -11,6 +11,7 @@ import re
 import time
 import psutil
 import torch
+from typing import Dict, List
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -47,7 +48,6 @@ class RichUIListener(ReIDPipelineListener):
     def start_keyboard_listener(self):
         try:
             import termios
-            import tty
             import threading
 
             self.old_settings = termios.tcgetattr(sys.stdin)
@@ -203,9 +203,9 @@ class RichUIListener(ReIDPipelineListener):
             self.live = None
         console.print(f"\n[bold red]Error: {message}[/bold red]")
 
-    def on_pipeline_end(self, registry: SimpleRegistry, output_path: str):
+    def on_pipeline_end(self, registries: Dict[str, SimpleRegistry], output_path: str):
         self.stop_keyboard_listener()
-        summary = registry.get_results_summary()
+        summary = {feed_name: reg.get_results_summary() for feed_name, reg in registries.items()}
         console.print(
             f"\n[bold yellow]Saving simple registry occurrences to:[/bold yellow] {output_path}"
         )
@@ -227,37 +227,46 @@ class RichUIListener(ReIDPipelineListener):
             console.print("[bold red]No identities found during processing.[/bold red]\n")
             return
 
-        summary_table = Table(box=box.HEAVY_EDGE, expand=True)
-        summary_table.add_column("Global ID", style="bold yellow", justify="center")
-        summary_table.add_column("Class Label", style="cyan")
-        summary_table.add_column("Total Occurrences", justify="center", style="bold green")
-        summary_table.add_column("Distinct Local Tracks", style="white")
-        summary_table.add_column("Video Sources Occurrences", style="white")
+        for feed_name, feed_summary in summary.items():
+            console.print(f"\n[bold cyan]Video Feed Source: {feed_name}[/bold cyan]")
+            if not feed_summary:
+                console.print("  [dim]No identities registered for this feed.[/dim]\n")
+                continue
 
-        for item in summary:
-            g_id = item["global_id"]
-            occs = item["occurrences"]
+            summary_table = Table(box=box.HEAVY_EDGE, expand=True)
+            summary_table.add_column("Track ID", style="bold yellow", justify="center")
+            summary_table.add_column("Class Label", style="cyan")
+            summary_table.add_column("Total Occurrences", justify="center", style="bold green")
+            summary_table.add_column("Frames Observed", style="white")
+            summary_table.add_column("Video Sources Occurrences", style="white")
 
-            # Count occurrences and gather local track IDs per video source
-            vid_counts = {}
-            vid_tracks = {}
-            for o in occs:
-                v = o["video"]
-                vid_counts[v] = vid_counts.get(v, 0) + 1
-                if v not in vid_tracks:
-                    vid_tracks[v] = set()
-                vid_tracks[v].add(o.get("local_track_id", -1))
+            for item in feed_summary:
+                g_id = item["track_id"]
+                occs = item["occurrences"]
 
-            source_info = ", ".join(
-                [f"[bold cyan]{v}[/bold cyan]: {c} frames" for v, c in vid_counts.items()]
-            )
-            track_info = ", ".join(
-                [f"[bold cyan]{v}[/bold cyan]: {sorted(list(t))}" for v, t in vid_tracks.items()]
-            )
-            cls = occs[0]["class_label"] if occs else "unknown"
-            summary_table.add_row(f"{g_id:03d}", cls, str(len(occs)), track_info, source_info)
+                # Count occurrences and gather frame details per video source
+                vid_counts: Dict[str, int] = {}
+                vid_frames: Dict[str, List[str]] = {}
+                for o in occs:
+                    v = o["feed_name"]
+                    vid_counts[v] = vid_counts.get(v, 0) + 1
+                    if v not in vid_frames:
+                        vid_frames[v] = []
+                    frame = o.get("frame")
+                    ts = o.get("timestamp_seconds")
+                    if frame is not None and ts is not None:
+                        vid_frames[v].append(f"F{frame} ({ts:.1f}s)")
 
-        console.print(summary_table)
+                source_info = ", ".join(
+                    [f"[bold cyan]{v}[/bold cyan]: {c} occurrences" for v, c in vid_counts.items()]
+                )
+                frame_info = ", ".join(
+                    [f"[bold cyan]{v}[/bold cyan]: {', '.join(f)}" for v, f in vid_frames.items()]
+                )
+                cls = occs[0]["class_label"] if occs else "unknown"
+                summary_table.add_row(f"{g_id:03d}", cls, str(len(occs)), frame_info, source_info)
+
+            console.print(summary_table)
 
     def make_layout(
         self,
@@ -480,7 +489,7 @@ class RichUIListener(ReIDPipelineListener):
             occs = data["occurrences"]
             row = [f"ID {gid:03d}", occs[-1]["class_label"] if occs else "unknown"]
             for v_name in self.video_names:
-                count = sum(1 for o in occs if o["video"] == v_name)
+                count = sum(1 for o in occs if o["feed_name"] == v_name)
                 row.append(str(count))
             row.append(str(len(occs)))
             table.add_row(*row)
@@ -588,12 +597,42 @@ class HeadlessUIListener(ReIDPipelineListener):
         clean_msg = re.sub(r"\[/?[a-zA-Z0-9 =_#]+\]", "", message)
         print(f"[{time.strftime('%H:%M:%S')}] [ERROR] {clean_msg}", file=sys.stderr)
 
-    def on_pipeline_end(self, registry: SimpleRegistry, output_path: str):
-        summary = registry.get_results_summary()
+    def on_pipeline_end(self, registries: Dict[str, SimpleRegistry], output_path: str):
+        summary = {feed_name: reg.get_results_summary() for feed_name, reg in registries.items()}
         print(f"[{time.strftime('%H:%M:%S')}] Saving simple registry occurrences to: {output_path}")
 
         print("\n=============================================")
         print("DMT RE-IDENTIFICATION FINAL MATCHING REPORT")
         print("=============================================")
-        print(f"Total Unique Identities: {len(registry.identities)}")
+        total_identities = sum(len(reg.identities) for reg in registries.values())
+        print(f"Total Unique Identities: {total_identities}")
+        if summary:
+            for feed_name, feed_summary in summary.items():
+                print(f"\nFeed Source: {feed_name}")
+                print("---------------------------------------------")
+                print("Registered Identities & Occurrence Details:")
+                if not feed_summary:
+                    print("  No identities registered for this feed.")
+                    continue
+                for item in feed_summary:
+                    g_id = item["track_id"]
+                    occs = item["occurrences"]
+                    cls = occs[0]["class_label"] if occs else "unknown"
+                    
+                    vid_counts: Dict[str, int] = {}
+                    vid_frames: Dict[str, List[str]] = {}
+                    for o in occs:
+                        v = o["feed_name"]
+                        vid_counts[v] = vid_counts.get(v, 0) + 1
+                        if v not in vid_frames:
+                            vid_frames[v] = []
+                        frame = o.get("frame")
+                        ts = o.get("timestamp_seconds")
+                        if frame is not None and ts is not None:
+                            vid_frames[v].append(f"F{frame} ({ts:.1f}s)")
+
+                    source_info = " | ".join(
+                        [f"{v}: {c} occurrences [{', '.join(vid_frames[v])}]" for v, c in vid_counts.items()]
+                    )
+                    print(f"  Track {g_id:03d} ({cls}): {len(occs)} total occurrences | {source_info}")
         print("=============================================\n")

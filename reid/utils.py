@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 import numpy as np
 
 
@@ -34,6 +34,10 @@ class FrameData:
     scores: Optional[np.ndarray] = None     # shape (N,)
     classes: Optional[np.ndarray] = None    # shape (N,)
     features: Optional[np.ndarray] = None   # shape (N, D)
+    tracks: Optional[np.ndarray] = None     # shape (M, 8)
+
+    def __repr__(self):
+        return f"FrameData(frame_count={self.frame_count}, feed_name={self.feed_name}, total_frames={self.total_frames}, timestamp={self.timestamp}, classes={self.classes}, features={self.features.shape if self.features is not None else None}, tracks={self.tracks.shape if self.tracks is not None else None})"
 
 
 class ReIDPipelineListener:
@@ -70,14 +74,14 @@ class ReIDPipelineListener:
     def on_video_end(self, video_path: str, total_frames: int):
         pass
 
-    def on_pipeline_end(self, registry: "SimpleRegistry", output_path: str):
+    def on_pipeline_end(self, registries: Dict[str, "SimpleRegistry"], output_path: str):
         pass
 
     def on_error(self, message: str):
         pass
 
 
-def is_valid_crop(bbox: np.ndarray, frame_shape: tuple) -> bool:
+def has_minimum_roi_area(bbox: np.ndarray, frame_shape: tuple, threshold:float = 3e-3) -> bool:
     """Validate if the crop bounding box meets size constraints.
 
     Args:
@@ -91,7 +95,7 @@ def is_valid_crop(bbox: np.ndarray, frame_shape: tuple) -> bool:
     w = x2 - x1
     h = y2 - y1
     W, H, _ = frame_shape
-    return (w * h) / (W * H) > 5e-3
+    return (w * h) / (W * H) > threshold 
 
 
 def resolve_path(p: str, base_dir: str) -> str:

@@ -56,7 +56,7 @@ def extract_embeddings_and_labels(
     """Extracts embeddings and creates human-readable labels for a list of occurrences."""
     labels = []
     for occ in occs:
-        video = occ.get("video", "unknown")
+        video = occ.get("feed_name", "unknown")
         frame = occ.get("frame", 0)
         timestamp = occ.get("timestamp_seconds", 0.0)
         labels.append(f"ID {global_id} | {video} | F{frame} ({timestamp:.1f}s)")
@@ -192,7 +192,7 @@ def main() -> None:
     for gid in target_ids:
         occs = by_id[gid]
         # Sort chronologically (by video, then frame number)
-        occs = sorted(occs, key=lambda x: (x.get("video", ""), x.get("frame", 0)))
+        occs = sorted(occs, key=lambda x: (x.get("feed_name", ""), x.get("frame", 0)))
         id_occs[gid] = occs
 
         embs, labels = extract_embeddings_and_labels(occs, gid, embeddings_dict)

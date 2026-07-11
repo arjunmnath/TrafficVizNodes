@@ -50,7 +50,7 @@ def should_keep_detections(
         by_video: dict[str, list[dict]] = defaultdict(list)
 
         for det in detections:
-            by_video[det["video"]].append(det)
+            by_video[det["feed_name"]].append(det)
 
         kept: list[dict] = []
 
@@ -88,6 +88,7 @@ def extract_reid_crops(
     min_time_gap_seconds: float = MIN_TIME_GAP_SECONDS,
     headless: bool = False,
     global_ids: list[int] | None = None,
+    matches_path: str | None = None,
 ) -> None:
     json_path = Path(json_path)
     video_dir = Path(video_dir)
@@ -134,7 +135,7 @@ def extract_reid_crops(
 
     try:
         with open(json_path, "r") as f:
-            data = json.load(f)
+            track_details = json.load(f)
     except Exception as e:
         log_event("ERROR", f"Failed to load JSON file: {e}", "red")
         if headless:
@@ -143,8 +144,84 @@ def extract_reid_crops(
             console.print(f"[bold red]Error: Failed to load JSON: {e}[/bold red]")
             return
 
-    if isinstance(data, list):
-        data = {str(item["global_id"]): item.get("occurrences", []) for item in data}
+    # Build track occurrences dictionary mapping (feed_name, track_id) -> occurrences
+    tracks_map = {}
+    if isinstance(track_details, dict):
+        for feed_name, tracks_list in track_details.items():
+            for t in tracks_list:
+                tid = t["track_id"]
+                occs = t.get("occurrences", [])
+                for occ in occs:
+                    occ["local_track_id"] = tid
+                    occ["similarity"] = 1.0
+                tracks_map[(feed_name, tid)] = occs
+    elif isinstance(track_details, list):
+        # Fallback if track_details is already formatted as global list
+        for item in track_details:
+            gid = item.get("global_id", item.get("track_id", 0))
+            occs = item.get("occurrences", [])
+            for occ in occs:
+                occ["local_track_id"] = occ.get("local_track_id", gid)
+                occ["similarity"] = occ.get("similarity", 1.0)
+            tracks_map[(occs[0].get("feed_name", "unknown") if occs else "unknown", gid)] = occs
+
+    # Connected components using Union-Find to group matched tracks
+    parent = {}
+    def find(x):
+        if parent[x] != x:
+            parent[x] = find(parent[x])
+        return parent[x]
+    def union(x, y):
+        rx = find(x)
+        ry = find(y)
+        if rx != ry:
+            parent[ry] = rx
+
+    # Initialize nodes
+    for key in tracks_map.keys():
+        parent[key] = key
+
+    # Map to store matching similarity for each track node
+    node_similarity = {}
+
+    if matches_path and Path(matches_path).exists():
+        log_event("SYSTEM", f"Loading matches from matches JSON: [cyan]{matches_path}[/cyan]", "cyan")
+        try:
+            with open(matches_path, "r") as f:
+                matches_data = json.load(f)
+            for match in matches_data:
+                node_a = (match["feed_a"], match["track_a"])
+                node_b = (match["feed_b"], match["track_b"])
+                sim = match.get("similarity", 1.0)
+                
+                # Check if we have occurrences for both tracks
+                if node_a in tracks_map and node_b in tracks_map:
+                    union(node_a, node_b)
+                    node_similarity[node_a] = max(node_similarity.get(node_a, 0.0), sim)
+                    node_similarity[node_b] = max(node_similarity.get(node_b, 0.0), sim)
+        except Exception as e:
+            log_event("WARNING", f"Failed to load matches file: {e}", "yellow")
+
+    # Update occurrences with their matched similarity
+    for node, sim in node_similarity.items():
+        if node in tracks_map:
+            for occ in tracks_map[node]:
+                occ["similarity"] = sim
+
+    # Group tracks by parent root
+    groups = defaultdict(list)
+    for node in tracks_map.keys():
+        root = find(node)
+        groups[root].append(node)
+
+    # Convert to data mapping: global_id -> list of occurrences
+    data = {}
+    for idx, (root, nodes) in enumerate(groups.items(), 1):
+        global_id = f"{idx:03d}"
+        group_occs = []
+        for node in nodes:
+            group_occs.extend(tracks_map[node])
+        data[global_id] = group_occs
 
     if global_ids:
         target_ids = set(str(gid) for gid in global_ids)
@@ -174,25 +251,29 @@ def extract_reid_crops(
     )
 
     # Count IDs with crops in both V1 and V2
-    all_vids = {det["video"] for occurrences in data.values() for det in occurrences}
+    both_videos_ids = []
+    all_vids = {det["feed_name"] for occurrences in data.values() for det in occurrences}
     all_vids_sorted = sorted(list(all_vids))
     if len(all_vids_sorted) >= 2:
         v1 = all_vids_sorted[0]
         v2 = all_vids_sorted[1]
         both_count = 0
-        for occurrences in data.values():
-            has_v1 = any(det["video"] == v1 for det in occurrences)
-            has_v2 = any(det["video"] == v2 for det in occurrences)
+        for global_id, occurrences in data.items():
+            has_v1 = any(det["feed_name"] == v1 for det in occurrences)
+            has_v2 = any(det["feed_name"] == v2 for det in occurrences)
             if has_v1 and has_v2:
                 both_count += 1
+                both_videos_ids.append(global_id)
         stats["IDs in V1 & V2"] = both_count
+    else:
+        both_videos_ids = []
 
     by_video: dict[str, list[dict]] = defaultdict(list)
 
     for global_id, detections in data.items():
         for det in detections:
             det["global_id"] = global_id
-            by_video[det["video"]].append(det)
+            by_video[det["feed_name"]].append(det)
 
     total_videos = len(by_video)
     log_event("SYSTEM", f"Grouped into [cyan]{total_videos}[/cyan] videos to process.", "cyan")
@@ -479,6 +560,7 @@ def extract_reid_crops(
     summary_table.add_row("Total Processing Time", f"{elapsed:.2f} seconds")
     for k, v in stats.items():
         summary_table.add_row(k, str(v))
+    summary_table.add_row("Global IDs in V1 & V2", str(both_videos_ids))
 
     console.print("\n")
     console.print(
@@ -489,6 +571,8 @@ def extract_reid_crops(
             expand=False,
         )
     )
+    
+    return both_videos_ids
 
 
 if __name__ == "__main__":
@@ -501,6 +585,13 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="Path to the JSON file containing tracking occurrences.",
+    )
+    parser.add_argument(
+        "--matches_path",
+        "-m",
+        type=str,
+        default=None,
+        help="Path to the JSON file containing cross-camera matches.",
     )
     parser.add_argument(
         "--video_dir",
@@ -547,6 +638,14 @@ if __name__ == "__main__":
         if fallback_json.exists():
             json_path = fallback_json
 
+    matches_path = None
+    if args.matches_path:
+        matches_path = Path(args.matches_path)
+        if not matches_path.exists():
+            fallback_matches = workspace_root / args.matches_path
+            if fallback_matches.exists():
+                matches_path = fallback_matches
+
     video_dir = Path(args.video_dir)
     if not video_dir.exists():
         fallback_video_dir = workspace_root / args.video_dir
@@ -562,4 +661,5 @@ if __name__ == "__main__":
         min_time_gap_seconds=args.min_time_gap,
         headless=args.headless,
         global_ids=args.global_ids,
+        matches_path=str(matches_path) if matches_path else None,
     )

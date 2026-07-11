@@ -23,29 +23,44 @@ from reid import (
     RichUIListener,
     HeadlessUIListener,
     resolve_path,
-    VideoFeederStage,
+)
+from reid.postprocessing import (
+    PostProcessingPipeline,
+    TrajectoryFusionStage,
+)
+
+from reid.stages import (
     SamplerStage,
+    VideoFeederStage,
     YoloDetectionStage,
     SingleModelFeatureStage,
     EnsembleModelFeatureStage,
     TrackingStage,
+    OfflineAddToRegistryStage,
 )
 
 
-def export_results(registry: SimpleRegistry, output_path: str) -> None:
+def export_results(registries: dict, output_path: str) -> None:
     """Export the registry results to JSON and embeddings to NPZ, outside pipeline scope.
 
     Args:
-        registry (SimpleRegistry): The global identity registry.
+        registries (dict): Mapping of feed name to SimpleRegistry.
         output_path (str): Output path for JSON summary.
     """
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
-    summary = registry.get_results_summary()
+    summary = {}
+    for feed_name, reg in registries.items():
+        summary[feed_name] = reg.get_results_summary()
+
     with open(output_path, "w") as f:
         json.dump(summary, f, indent=4)
 
-    embeddings = registry.get_embeddings_dict()
+    embeddings = {}
+    for feed_name, reg in registries.items():
+        for global_id, data in reg.get_embeddings_dict().items():
+            embeddings[f"{feed_name}_{global_id}"] = data
+
     if embeddings:
         npz_path = os.path.splitext(output_path)[0] + ".npz"
         np.savez(npz_path, **embeddings)
@@ -133,6 +148,18 @@ def main():
         help="Tracker configuration filename (e.g. bytetrack.yaml, botsort.yaml) or custom config YAML path",
     )
 
+    parser.add_argument(
+        "--fusion-mode",
+        type=str,
+        default="attention",
+        choices=["mean", "attention", "none"],
+        dest="fusion_mode",
+        help="Trajectory fusion mode for the postprocessing pipeline: "
+             "'mean' = simple mean pooling, "
+             "'attention' = scaled dot-product self-attention, "
+             "'none' = disable postprocessing",
+    )
+
     args = parser.parse_args()
 
     # Resolve paths
@@ -195,24 +222,40 @@ def main():
         feature_stage = SingleModelFeatureStage(
             weights_path=args.weights,
             device=args.device,
+            fp16=args.fp16,
         )
+
+    # Build postprocessing pipeline
+    if args.fusion_mode != "none":
+        postprocessing_pipeline = PostProcessingPipeline([
+            TrajectoryFusionStage(mode=args.fusion_mode),
+        ])
+    else:
+        postprocessing_pipeline = None
 
     stages = [
         VideoFeederStage(),
         SamplerStage(sample_fps=args.sample_fps, time_based=False),
         YoloDetectionStage(yolo_path=args.yolo_model),
         feature_stage,
-        TrackingStage(tracker_config=args.tracker)
+        TrackingStage(
+            tracker_config=args.tracker,
+            postprocessing_pipeline=postprocessing_pipeline,
+        ),
+        OfflineAddToRegistryStage(),
     ]
 
-    # Create a shared registry across all pipeline runs
-    registry = SimpleRegistry(match_threshold=args.threshold)
+    # Create feed-specific registries
+    registries = {}
+    for video in videos:
+        feed_name = os.path.basename(video)
+        registries[feed_name] = SimpleRegistry()
 
     pipeline = ReIDPipeline(
         stages=stages,
         threshold=args.threshold,
         max_frames=args.max_frames,
-        registry=registry,
+        registry=None,  # Assigned dynamically during run loop
     )
 
     feeder_stage = stages[0]  # VideoFeederStage
@@ -220,15 +263,17 @@ def main():
     pipeline.initialize(listener)
 
     for idx, video in enumerate(videos):
+        feed_name = os.path.basename(video)
+        pipeline.registry = registries[feed_name]
         feeder_stage.set_video_path(video)
         if listener:
             listener.current_video_idx = idx + 1
         pipeline.run(listener)
 
     # Export results outside the pipeline scope
-    export_results(registry, output_path)
+    export_results(registries, output_path)
     if listener:
-        listener.on_pipeline_end(registry, output_path)
+        listener.on_pipeline_end(registries, output_path)
 
 
 if __name__ == "__main__":

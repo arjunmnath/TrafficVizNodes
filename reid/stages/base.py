@@ -26,3 +26,7 @@ class PipelineStage(ABC):
             FrameData: Updated dataclass context.
         """
         pass
+
+    def finalize(self, pipeline: Any) -> None:
+        """Clean up stage-specific resources or finalize tracking results at pipeline end."""
+        pass

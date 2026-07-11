@@ -2,13 +2,9 @@ import os
 from typing import Any, List, Optional
 import numpy as np
 import torch
-import torchvision.transforms as T
-from PIL import Image
 
 from reid.stages.base import PipelineStage
-from reid.utils import ReIDPipelineListener, is_valid_crop, FrameData
-from reid.inference.loader import get_config_for_checkpoint
-from reid.inference.model_factory import build_model_from_config
+from reid.utils import ReIDPipelineListener, has_minimum_roi_area, FrameData
 from reid.inference.utils import get_device
 from reid.inference import EnsembleReID
 
@@ -16,34 +12,28 @@ from reid.inference import EnsembleReID
 class SingleModelFeatureStage(PipelineStage):
     """Stage 2: Extracts ReID features using a legacy single model backbone."""
 
-    def __init__(self, weights_path: str, device: str = "cpu"):
+    def __init__(self, weights_path: str, device: str = "cpu", fp16: bool = False):
         """Constructor.
 
         Args:
             weights_path (str): Path to single model weights checkpoint (.pth).
             device (str): Inference device (cpu, cuda, etc.).
+            fp16 (bool): Whether to enable half precision.
         """
         self.weights_path = weights_path
         self.device = get_device(device)
-        self.model = None
-        self.val_transforms = None
-        self.inf_cfg = None
+        self.fp16 = fp16
+        self.extractor = None
 
     def initialize(self, listener: ReIDPipelineListener = None) -> None:
         if listener:
-            listener.on_init_status("Loading single ReID model configuration...")
-        self.inf_cfg = get_config_for_checkpoint(self.weights_path, device=self.device, fp16=False)
-        self.inf_cfg.flip_feats = True
-
-        if listener:
-            listener.on_init_status("Building single ReID model backbone and loading weights...")
-        self.model = build_model_from_config(self.inf_cfg)
-
-        self.val_transforms = T.Compose([
-            T.Resize(self.inf_cfg.image_size, interpolation=3),
-            T.ToTensor(),
-            T.Normalize(mean=self.inf_cfg.pixel_mean, std=self.inf_cfg.pixel_std),
-        ])
+            listener.on_init_status("Loading single ReID model using EnsembleReID backend...")
+        # Resolve config and load single model weights checkpoint via EnsembleReID
+        self.extractor = EnsembleReID(
+            model_paths=[self.weights_path],
+            device=self.device if isinstance(self.device, str) else str(self.device),
+            fp16=self.fp16,
+        )
 
     def process(self, data: FrameData, pipeline: Any) -> FrameData:
         if data.skip or data.end_of_stream:
@@ -59,10 +49,12 @@ class SingleModelFeatureStage(PipelineStage):
             return data
 
         features = []
-        valid_indices = []
+        valid_crops = []
+        valid_idxs = []
 
         for idx, (box, score, cls) in enumerate(zip(boxes, scores, classes)):
-            if not is_valid_crop(box, frame.shape):
+            if not has_minimum_roi_area(box, frame.shape):
+                features.append(None)
                 continue
 
             x1, y1, x2, y2 = map(int, box)
@@ -70,33 +62,30 @@ class SingleModelFeatureStage(PipelineStage):
             x2, y2 = min(frame.shape[1], x2), min(frame.shape[0], y2)
 
             crop = frame[y1:y2, x1:x2]
+            valid_crops.append(crop)
+            valid_idxs.append(idx)
+            features.append(None)  # Placeholder
 
-            img = Image.fromarray(crop[..., ::-1])
-            img_t = self.val_transforms(img).unsqueeze(0).to(self.device)
+        if len(valid_crops) > 0:
+            embeddings_tensor = self.extractor.extract_batch(valid_crops, is_bgr=True)
+            embeddings = embeddings_tensor.cpu().numpy()
+            for embed_idx, orig_idx in enumerate(valid_idxs):
+                features[orig_idx] = embeddings[embed_idx]
 
-            with torch.no_grad():
-                if self.inf_cfg.flip_feats:
-                    f2 = self.model(img_t)
-                    img_flip = torch.flip(img_t, [3])
-                    f1 = self.model(img_flip)
-                    feat = f2 + f1
-                else:
-                    feat = self.model(img_t)
-
-                feat = torch.nn.functional.normalize(feat, p=2, dim=1)
-                embedding = feat.squeeze(0).cpu().numpy()
-
-            features.append(embedding)
-            valid_indices.append(idx)
-
-        data.boxes = boxes[valid_indices]
-        data.scores = scores[valid_indices]
-        data.classes = classes[valid_indices]
-
-        if features:
-            data.features = np.stack(features, axis=0)
+        # Resolve missing feature dimensions
+        valid_feat = next((f for f in features if f is not None), None)
+        if valid_feat is not None:
+            feat_dim = len(valid_feat)
         else:
-            data.features = np.empty((0, 0), dtype=np.float32)
+            # All crops are invalid; run a dummy extraction to determine feature dimension
+            dummy_crop = np.zeros((128, 64, 3), dtype=np.uint8)
+            dummy_feat = self.extractor.extract(dummy_crop, is_bgr=True)
+            feat_dim = dummy_feat.shape[0]
+
+        zeros = np.zeros(feat_dim, dtype=np.float32)
+        features = [f if f is not None else zeros for f in features]
+
+        data.features = np.stack(features, axis=0)
 
         return data
 
@@ -154,10 +143,12 @@ class EnsembleModelFeatureStage(PipelineStage):
             return data
 
         features = []
-        valid_indices = []
+        valid_crops = []
+        valid_idxs = []
 
         for idx, (box, score, cls) in enumerate(zip(boxes, scores, classes)):
-            if not is_valid_crop(box, frame.shape):
+            if not has_minimum_roi_area(box, frame.shape):
+                features.append(None)
                 continue
 
             x1, y1, x2, y2 = map(int, box)
@@ -165,21 +156,29 @@ class EnsembleModelFeatureStage(PipelineStage):
             x2, y2 = min(frame.shape[1], x2), min(frame.shape[0], y2)
 
             crop = frame[y1:y2, x1:x2]
+            valid_crops.append(crop)
+            valid_idxs.append(idx)
+            features.append(None)  # Placeholder
 
-            feat_tensor = self.ensemble.extract(
-                crop, is_bgr=True, return_dict=False, fusion=self.fusion
-            )
-            embedding = feat_tensor.cpu().numpy()
-            features.append(embedding)
-            valid_indices.append(idx)
+        if len(valid_crops) > 0:
+            embeddings_tensor = self.ensemble.extract_batch(valid_crops, is_bgr=True, fusion=self.fusion)
+            embeddings = embeddings_tensor.cpu().numpy()
+            for embed_idx, orig_idx in enumerate(valid_idxs):
+                features[orig_idx] = embeddings[embed_idx]
 
-        data.boxes = boxes[valid_indices]
-        data.scores = scores[valid_indices]
-        data.classes = classes[valid_indices]
-
-        if features:
-            data.features = np.stack(features, axis=0)
+        # Resolve missing feature dimensions
+        valid_feat = next((f for f in features if f is not None), None)
+        if valid_feat is not None:
+            feat_dim = len(valid_feat)
         else:
-            data.features = np.empty((0, 0), dtype=np.float32)
+            # All crops are invalid; run a dummy extraction to determine feature dimension
+            dummy_crop = np.zeros((128, 64, 3), dtype=np.uint8)
+            dummy_feat = self.ensemble.extract(dummy_crop, is_bgr=True, fusion=self.fusion)
+            feat_dim = dummy_feat.shape[0]
+
+        zeros = np.zeros(feat_dim, dtype=np.float32)
+        features = [f if f is not None else zeros for f in features]
+
+        data.features = np.stack(features, axis=0)
 
         return data

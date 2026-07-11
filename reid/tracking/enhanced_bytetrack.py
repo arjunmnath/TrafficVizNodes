@@ -28,7 +28,7 @@ class EnhancedSTrack(STrack):
         self.smooth_feat: Optional[np.ndarray] = None
         self.alpha: float = 0.9  # Default blending factor for exponential moving average
 
-        if feat is not None:
+        if feat is not None and not np.all(feat == 0.0):
             self.update_features(feat)
 
     def update_features(self, feat: np.ndarray) -> None:
@@ -94,7 +94,6 @@ class EnhancedByteTracker(BYTETracker):
         # Read cost weights from args
         self.iou_weight = getattr(args, "iou_weight", 0.7)
         self.appearance_weight = getattr(args, "appearance_weight", 0.3)
-
     @classmethod
     def setup_predictor(cls, predictor: Any) -> None:
         """Register detection pre-hook to extract features when using model='auto'.
@@ -211,7 +210,6 @@ class EnhancedByteTracker(BYTETracker):
         }
         
         fused_cost = CostFusion.combine(costs, weights)
-
         # Override missing feature pairs to pure iou_cost
         if missing_mask is not None:
             fused_cost = np.where(missing_mask, iou_cost, fused_cost)
