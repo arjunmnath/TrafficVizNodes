@@ -2,8 +2,6 @@ from camera_node.dmt_backbones.se_module import SELayer
 import torch.nn as nn
 import torch
 import math
-from collections import OrderedDict
-import torch.utils.checkpoint as cp
 
 __all__ = ["se_resnet50_ibn_a", "se_resnet101_ibn_a", "se_resnet152_ibn_a"]
 

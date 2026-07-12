@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import math
 import torch.utils.model_zoo as model_zoo
-import torch.nn.functional as F
 
 __all__ = ["ResNet_IBN", "resnet50_ibn_a", "resnet101_ibn_a", "resnet152_ibn_a"]
 

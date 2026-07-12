@@ -22,7 +22,6 @@ Hacked together by / Copyright 2020 Ross Wightman
 """
 
 import math
-import random
 from functools import partial
 from itertools import repeat
 

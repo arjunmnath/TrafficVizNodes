@@ -19,7 +19,6 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 from PIL import Image
 import numpy as np
-from functools import partial
 from typing import Optional
 
 # DMT backbone imports

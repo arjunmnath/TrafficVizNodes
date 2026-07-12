@@ -133,6 +133,9 @@ dmypy.json
 # Virtual environments
 dataset/
 *.pt
+*.pth
+*.onnx
+*.onnx.data
 trained_models
 .idea
 
