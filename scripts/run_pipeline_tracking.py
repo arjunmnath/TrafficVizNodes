@@ -24,8 +24,7 @@ from reid.stages import (
     VideoFeederStage,
     YoloDetectionStage,
     TrackingStage,
-    SingleModelFeatureStage,
-    EnsembleModelFeatureStage,
+    FeatureStage,
     OfflineAddToRegistryStage,
 )
 
@@ -101,13 +100,10 @@ def parse_args() -> argparse.Namespace:
         help="Path where the annotated output video will be saved.",
     )
     parser.add_argument(
-        "-m",
-        "--model",
-        "--model_path",
+        "--yolo_model",
         type=str,
-        default="trained_models/yolov8s.pt",
-        help="Path to YOLO model weights (default: yolov8s.pt).",
-        dest="model_path",
+        default="yolov8s.pt",
+        help="Name of YOLO model (default: yolov8s.pt).",
     )
     parser.add_argument(
         "--tracker",
@@ -139,36 +135,7 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Use appearance aware tracking by running ReID feature extraction.",
     )
-    parser.add_argument(
-        "--ensemble",
-        action="store_true",
-        help="Run using the ensembled ReID pipeline instead of single model.",
-    )
-    parser.add_argument(
-        "--weights",
-        type=str,
-        default="trained_models/101a_384/v1/resnet101_ibn_a_2.pth",
-        help="Path to trained model weights checkpoint (for single model).",
-    )
-    parser.add_argument(
-        "--model_dir",
-        type=str,
-        default="trained_models",
-        help="Directory containing the ensembled models.",
-    )
-    parser.add_argument(
-        "--model_paths",
-        type=str,
-        default=None,
-        help="Comma-separated paths to specific model checkpoints for the ensemble.",
-    )
-    parser.add_argument(
-        "--fusion",
-        type=str,
-        default="concat",
-        choices=["concat", "mean"],
-        help="Embedding fusion method for ensemble (concat, mean).",
-    )
+
     parser.add_argument(
         "--fp16",
         action="store_true",
@@ -200,33 +167,16 @@ def main() -> None:
         sys.exit(1)
 
     # Check model path
-    if not os.path.exists(args.model_path):
-        logger.error(f"Model path file not found: {args.model_path}")
-        sys.exit(1)
-
-    logger.info(f"Initializing stages...")
+    logger.info("Initializing stages...")
     feeder_stage = VideoFeederStage(args.video_path)
-    detector_stage = YoloDetectionStage(args.model_path)
+    detector_stage = YoloDetectionStage(args.yolo_model)
 
     feature_stage = None
     if args.fuse_appearance:
-        if args.ensemble:
-            model_paths = None
-            if args.model_paths:
-                model_paths = [p.strip() for p in args.model_paths.split(",") if p.strip()]
-            feature_stage = EnsembleModelFeatureStage(
-                model_dir=args.model_dir,
-                model_paths=model_paths,
-                device=args.device,
-                fp16=args.fp16,
-                fusion=args.fusion,
-            )
-        else:
-            feature_stage = SingleModelFeatureStage(
-                weights_path=args.weights,
-                device=args.device,
-                fp16=args.fp16,
-            )
+        feature_stage = FeatureStage(
+            device=args.device,
+            fp16=args.fp16,
+        )
 
     tracker_stage = TrackingStage(tracker_config=args.tracker)
     offline_registry_stage = OfflineAddToRegistryStage()
@@ -251,7 +201,6 @@ def main() -> None:
     fps = feeder_stage.fps
     total_frames = feeder_stage.total_frames
 
-    # Get video frame dimensions
     cap_temp = cv2.VideoCapture(args.video_path)
     width = int(cap_temp.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap_temp.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -270,7 +219,7 @@ def main() -> None:
     logger.info(f"Tracker configuration: {args.tracker}")
     logger.info(f"Tracking classes: {classes}")
     if feature_stage is not None:
-        logger.info(f"Appearance awareness ENABLED (Ensemble: {args.ensemble})")
+        logger.info("Appearance awareness ENABLED (Ensemble: True)")
 
     # Initialize video writer
     output_dir = Path(args.output_path).parent

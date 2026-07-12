@@ -12,8 +12,8 @@ sys.modules["torch._six"] = torch_six_mock
 
 import torch
 
-from ..model.make_model import make_model
-from .config import InferenceConfig
+from .model.make_model import make_model
+from .config import InferenceConfig, EnsembleConfig
 
 
 def build_model_from_config(config: InferenceConfig) -> torch.nn.Module:
@@ -41,4 +41,12 @@ def build_model_from_config(config: InferenceConfig) -> torch.nn.Module:
     # Set to evaluation mode
     model.eval()
 
+    return model
+
+
+def build_ensemble_model(config: EnsembleConfig) -> torch.nn.Module:
+    """Builds an EnsembleModel instance based on the EnsembleConfig."""
+    from .model.ensemble_model import EnsembleModel
+
+    model = EnsembleModel(config)
     return model

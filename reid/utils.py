@@ -114,3 +114,59 @@ def resolve_path(p: str, base_dir: str) -> str:
     if os.path.isabs(p):
         return p
     return os.path.abspath(os.path.join(base_dir, p))
+
+
+def resolve_model_weights(model_path: str) -> str:
+    """Resolves a model weight file path to its absolute path.
+
+    If the path is absolute or exists, it is returned.
+    Otherwise, we attempt to locate it under the 'trained_model' directory in the workspace.
+
+    Args:
+        model_path (str): Path or filename of the model weights.
+
+    Returns:
+        str: Resolved absolute path to the weights.
+    """
+    if not model_path:
+        return model_path
+
+    if os.path.isabs(model_path):
+        return model_path
+
+    if os.path.exists(model_path):
+        return os.path.abspath(model_path)
+
+    # Determine workspace root (where the 'reid' directory and 'trained_model' reside)
+    # Since reid/utils.py is at <workspace_root>/reid/utils.py, its parent is the workspace root.
+    utils_dir = os.path.dirname(os.path.abspath(__file__))
+    workspace_root = os.path.dirname(utils_dir)
+
+    # Try resolving directly under workspace_root/trained_model
+    resolved_path = os.path.join(workspace_root, "trained_model", model_path)
+    if os.path.exists(resolved_path):
+        return resolved_path
+
+    # Try resolving if model_path already includes trained_model/ or trained_models/ prefix
+    resolved_direct = os.path.join(workspace_root, model_path)
+    if os.path.exists(resolved_direct):
+        return resolved_direct
+
+    # If the user passed "trained_models/yolov8s.pt", and the directory is actually "trained_model"
+    normalized_path = model_path
+    if normalized_path.startswith("trained_models/"):
+        normalized_path = normalized_path.replace("trained_models/", "trained_model/", 1)
+        resolved_normalized = os.path.join(workspace_root, normalized_path)
+        if os.path.exists(resolved_normalized):
+            return resolved_normalized
+
+    # If it is just a filename and is not found under trained_model, try to search it
+    # in trained_model by taking the basename
+    basename = os.path.basename(model_path)
+    resolved_basename = os.path.join(workspace_root, "trained_model", basename)
+    if os.path.exists(resolved_basename):
+        return resolved_basename
+
+    # Fallback to the join of workspace_root and trained_model/model_path
+    return os.path.abspath(os.path.join(workspace_root, "trained_model", model_path))
+

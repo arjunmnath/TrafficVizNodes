@@ -11,7 +11,6 @@ import re
 import sys
 from pathlib import Path
 from PIL import Image
-import numpy as np
 from tqdm import tqdm
 
 # Add workspace root to python path to import app modules
@@ -19,7 +18,7 @@ workspace_root = Path(__file__).resolve().parent.parent
 sys.path.append(str(workspace_root))
 
 from inference_node.retrieval.encoder import get_retrieval_encoder, BaseRetrievalEncoder
-from inference_node.vqa import get_vqa_reasoner, BaseVQAReasoner, CandidateImage, RankedResult
+from inference_node.vqa import get_vqa_reasoner, BaseVQAReasoner, CandidateImage
 from inference_node.retrieval.query_parser import parse_query
 from shared.utils import setup_logger, compute_cosine_similarity
 

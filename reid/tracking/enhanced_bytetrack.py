@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional
 
 from ultralytics.trackers.byte_tracker import BYTETracker, STrack
 from ultralytics.trackers.utils import matching

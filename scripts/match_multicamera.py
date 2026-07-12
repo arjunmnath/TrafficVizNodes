@@ -21,8 +21,7 @@ import argparse
 import json
 import sys
 from itertools import product
-from pathlib import Path
-from typing import Dict, List, NamedTuple, Tuple
+from typing import Dict, List, NamedTuple
 
 import numpy as np
 
@@ -323,7 +322,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    print(f"\n=== Multi-Camera Track Matching ===")
+    print("\n=== Multi-Camera Track Matching ===")
     print(f"  JSON           : {args.json}")
     print(f"  NPZ            : {args.npz}")
     print(f"  Threshold      : {args.threshold}")

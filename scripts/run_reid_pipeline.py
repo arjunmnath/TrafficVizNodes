@@ -33,8 +33,7 @@ from reid.stages import (
     SamplerStage,
     VideoFeederStage,
     YoloDetectionStage,
-    SingleModelFeatureStage,
-    EnsembleModelFeatureStage,
+    FeatureStage,
     TrackingStage,
     OfflineAddToRegistryStage,
 )
@@ -71,15 +70,9 @@ def main():
     parser.add_argument("--video1", type=str, required=True, help="Path to first video file")
     parser.add_argument("--video2", type=str, required=True, help="Path to second video file")
     parser.add_argument(
-        "--weights",
-        type=str,
-        default="trained_models/101a_384/v1/resnet101_ibn_a_2.pth",
-        help="Path to trained model weights checkpoint (for single model)",
-    )
-    parser.add_argument(
         "--yolo_model",
         type=str,
-        default="trained_models/yolov8s.pt",
+        default="trained_model/yolov8s.pt",
         help="Path to YOLOv8 model file",
     )
     parser.add_argument("--threshold", type=float, default=0.5, help="ReID matching threshold")
@@ -102,31 +95,6 @@ def main():
         "--headless", action="store_true", help="Run in headless mode (no interactive terminal UI)"
     )
 
-    # Ensemble arguments
-    parser.add_argument(
-        "--ensemble",
-        action="store_true",
-        help="Run using the ensembled ReID pipeline instead of single model",
-    )
-    parser.add_argument(
-        "--model_dir",
-        type=str,
-        default="trained_models",
-        help="Directory containing the ensembled models",
-    )
-    parser.add_argument(
-        "--model_paths",
-        type=str,
-        default=None,
-        help="Comma-separated paths to specific model checkpoints for the ensemble",
-    )
-    parser.add_argument(
-        "--fusion",
-        type=str,
-        default="concat",
-        choices=["concat", "mean"],
-        help="Embedding fusion method for ensemble (concat, mean)",
-    )
     parser.add_argument(
         "--fp16",
         action="store_true",
@@ -179,6 +147,7 @@ def main():
         listener = RichUIListener(videos)
 
     # Show configuration
+    model_dir = resolve_path("trained_model", workspace_root)
     config_data = {
         "Video Sources": videos,
         "YOLO Model": args.yolo_model,
@@ -187,44 +156,18 @@ def main():
         "Max Frames": str(args.max_frames) if args.max_frames > 0 else "All",
         "Sample FPS": str(args.sample_fps) if args.sample_fps > 0 else "Full FPS",
         "Output Path": output_path,
-        "Pipeline Mode": "Ensemble" if args.ensemble else "Single Model",
+        "Pipeline Mode": "Ensemble (Centroid Fusion)",
+        "Ensemble Model Dir": model_dir,
         "YOLO Tracker": args.tracker,
+        "FP16 Enabled": str(args.fp16),
     }
-
-    if args.ensemble:
-        model_paths = None
-        if args.model_paths:
-            model_paths = [
-                resolve_path(p.strip(), workspace_root) for p in args.model_paths.split(",")
-            ]
-        model_dir = resolve_path(args.model_dir, workspace_root)
-
-        if args.model_paths:
-            config_data["Ensemble Model Paths"] = args.model_paths
-        else:
-            config_data["Ensemble Model Dir"] = model_dir
-        config_data["Ensemble Fusion"] = args.fusion
-        config_data["FP16 Enabled"] = str(args.fp16)
-    else:
-        config_data["DMT Weights"] = args.weights
 
     listener.show_configuration(config_data)
 
-    # Create the stages for the Pipeline pattern
-    if args.ensemble:
-        feature_stage = EnsembleModelFeatureStage(
-            model_dir=model_dir,
-            model_paths=model_paths,
-            device=args.device,
-            fp16=args.fp16,
-            fusion=args.fusion,
-        )
-    else:
-        feature_stage = SingleModelFeatureStage(
-            weights_path=args.weights,
-            device=args.device,
-            fp16=args.fp16,
-        )
+    feature_stage = FeatureStage(
+        device=args.device,
+        fp16=args.fp16,
+    )
 
     # Build postprocessing pipeline
     if args.fusion_mode != "none":

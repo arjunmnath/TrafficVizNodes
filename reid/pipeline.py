@@ -1,4 +1,3 @@
-from typing import final
 import time
 from typing import List, Optional
 

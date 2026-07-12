@@ -1,5 +1,5 @@
 # vim: expandtab:ts=4:sw=4
-from typing import Tuple, Optional, Callable, Dict, Any, List
+from typing import Tuple, Callable, Dict, Any, List
 import colorsys
 from .image_viewer import ImageViewer
 from tqdm import tqdm  # type: ignore[import-untyped]

@@ -7,7 +7,6 @@ Supports comparing a single global ID, two global IDs, or multiple global IDs.
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 

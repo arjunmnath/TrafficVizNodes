@@ -1,5 +1,5 @@
 import time
-from typing import Any, List, Optional
+from typing import Any, Optional
 from reid.stages.base import PipelineStage
 from reid.utils import ReIDPipelineListener, FrameData
 from reid.tracking.tracker import Tracker
