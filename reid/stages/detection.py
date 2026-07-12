@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, List
 from reid.stages.base import PipelineStage
 from reid.utils import ReIDPipelineListener, FrameData
 from reid.tracking.detector import Detector
@@ -27,7 +27,7 @@ class YoloDetectionStage(PipelineStage):
 
         frame = data.frame
         # Run detection. Target COCO classes: person(0), car(2), motorcycle(3), bus(5), truck(7).
-        dets = self.detector.detect(frame, conf=0.25, classes=[0, 2, 3, 5, 7])
+        dets = self.detector.detect(frame, conf=0.25, classes=list(pipeline.coco_classes.keys()))
 
         data.boxes = dets["boxes"]
         data.scores = dets["scores"]

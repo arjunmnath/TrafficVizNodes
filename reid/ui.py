@@ -477,11 +477,11 @@ class RichUIListener(ReIDPipelineListener):
             comp_track = data.get("compressed_track")
             cls = data.get("class_label", "unknown")
             feed = data.get("feed_name", "")
-            n_smooth = len(data.get("smooth_embeddings", []))
+            n_frames = len(data.get("appearance_embeddings", []))
             row = [f"ID {gid:03d}", cls]
             for v_name in self.video_names:
-                row.append(str(n_smooth) if v_name == feed else "0")
-            row.append(str(n_smooth))
+                row.append(str(n_frames) if v_name == feed else "0")
+            row.append(str(n_frames))
             table.add_row(*row)
 
         reg_title = "[bold green]Live Global Registry[/bold green]"

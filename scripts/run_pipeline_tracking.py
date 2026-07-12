@@ -277,7 +277,7 @@ def main() -> None:
                         bbox = t[0:4]
                         track_id = int(t[4])
                         cls_id = int(t[6])
-                        class_name = detector_stage.detector.model.names.get(cls_id, "unknown")
+                        class_name = getattr(pipeline, "coco_classes", {}).get(cls_id, "unknown")
                         label = f"{class_name} - {track_id}"
                         color = get_color(track_id)
                         draw_box(frame, bbox, label, color)

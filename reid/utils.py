@@ -82,7 +82,7 @@ class ReIDPipelineListener:
         pass
 
 
-def has_minimum_roi_area(bbox: np.ndarray, frame_shape: tuple, threshold: float = 3e-3) -> bool:
+def has_minimum_roi_area(bbox: np.ndarray, frame_shape: tuple, threshold: float = 0e-3) -> bool:
     """Validate if the crop bounding box meets size constraints.
 
     Args:

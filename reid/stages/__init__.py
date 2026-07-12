@@ -6,6 +6,7 @@ from reid.stages.detection import YoloDetectionStage
 from reid.stages.feature_production import FeatureStage
 from reid.stages.tracking import TrackingStage
 from reid.stages.offline_registry import OfflineAddToRegistryStage
+from reid.stages.buffer import ReIDBufferStage
 
 __all__ = [
     "PipelineStage",
@@ -16,4 +17,5 @@ __all__ = [
     "FeatureStage",
     "TrackingStage",
     "OfflineAddToRegistryStage",
+    "ReIDBufferStage",
 ]

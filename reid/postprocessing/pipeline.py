@@ -23,10 +23,8 @@ class TerminatedTrack:
         class_label: Detected object class (e.g. 'person', 'car').
         feed_name: Video feed / camera name that produced this track.
 
-        occurrence_embeddings: Per-frame raw detection feature vectors, shape (N, D).
+        appearance_embeddings: Per-frame raw detection feature vectors, shape (N, D).
             These are the features extracted directly from the ReID model per frame.
-        smooth_embedding: Final tracker moving-average embedding, shape (D,).
-            Set from ``track.embedding`` provided by the Tracker at termination.
 
         fused_embedding: Output of the trajectory fusion stage, shape (D,).
             None until TrajectoryFusionStage runs.
@@ -40,10 +38,7 @@ class TerminatedTrack:
     feed_name: str = ""
 
     # Raw per-frame embeddings collected by the registry during the track's lifetime
-    occurrence_embeddings: Optional[np.ndarray[Any, Any]] = None  # shape (N, D)
-
-    # Tracker's final smoothed embedding at termination time
-    smooth_embedding: Optional[np.ndarray[Any, Any]] = None  # shape (D,)
+    appearance_embeddings: Optional[np.ndarray[Any, Any]] = None  # shape (N, D)
 
     # Set by TrajectoryFusionStage
     fused_embedding: Optional[np.ndarray[Any, Any]] = None  # shape (D,)

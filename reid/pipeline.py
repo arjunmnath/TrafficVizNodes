@@ -40,6 +40,15 @@ class ReIDPipeline:
         else:
             self.registry = SimpleRegistry()
 
+        # Target COCO classes used for detections: person(0), car(2), motorcycle(3), bus(5), truck(7)
+        self.coco_classes = {
+            # 0: "person",
+            2: "car",
+            3: "motorcycle",
+            5: "bus",
+            7: "truck",
+        }
+
     def initialize(self, listener: ReIDPipelineListener = None) -> None:
         """Initialize all stages sequentially."""
         if listener:

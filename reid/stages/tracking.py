@@ -45,26 +45,41 @@ class TrackingStage(PipelineStage):
             class_label = "unknown"
             feed_name = ""
 
-            # Pull occurrence_embeddings from the registry for this track
-            occurrence_embeddings = None
+            # Pull appearance_embeddings from the registry for this track
+            appearance_embeddings = None
             if hasattr(pipeline, "registry") and pipeline.registry is not None:
                 entry = pipeline.registry.identities.get(track.track_id)
                 if entry is not None:
-                    occ_list = entry.get("occurrence_embeddings", [])
-                    if occ_list:
+                    app_list = entry.get("appearance_embeddings", [])
+                    if app_list:
                         import numpy as np
 
-                        occurrence_embeddings = np.array(occ_list, dtype=np.float32)
+                        appearance_embeddings = np.array(app_list, dtype=np.float32)
                     # Pull feed_name and class_label from registry attributes directly
                     feed_name = entry.get("feed_name", "")
                     class_label = entry.get("class_label", "unknown")
+
+            # Fallback: pull from ReIDBufferStage if registry didn't have it
+            if appearance_embeddings is None:
+                from reid.stages.buffer import ReIDBufferStage
+
+                buffer_stage = next(
+                    (s for s in pipeline.stages if isinstance(s, ReIDBufferStage)), None
+                )
+                if buffer_stage is not None and track.track_id in buffer_stage.active_tracks:
+                    bt = buffer_stage.active_tracks[track.track_id]
+                    if bt.appearance_embeddings:
+                        import numpy as np
+
+                        appearance_embeddings = np.array(bt.appearance_embeddings, dtype=np.float32)
+                    feed_name = bt.feed_name
+                    class_label = bt.class_label
 
             terminated = TerminatedTrack(
                 track_id=track.track_id,
                 class_label=class_label,
                 feed_name=feed_name,
-                occurrence_embeddings=occurrence_embeddings,
-                smooth_embedding=getattr(track, "embedding", None),
+                appearance_embeddings=appearance_embeddings,
                 history=getattr(track, "history", None),
             )
 
@@ -80,6 +95,20 @@ class TrackingStage(PipelineStage):
                     from tracking.serialization import JsonSerializer
                     serialized_dict = JsonSerializer.serialize_to_dict(compressed_track)
                     pipeline.registry.add_compressed_track(track.track_id, serialized_dict)
+
+            # Notify ReIDBufferStage of track termination
+            from reid.stages.buffer import ReIDBufferStage
+
+            buffer_stage = next((s for s in pipeline.stages if isinstance(s, ReIDBufferStage)), None)
+            if buffer_stage is not None:
+                term_timestamp = None
+                if track.history and track.history.get("timestamps"):
+                    term_timestamp = track.history["timestamps"][-1]
+                buffer_stage.handle_track_terminated(
+                    track_id=track.track_id,
+                    terminated_track=terminated,
+                    timestamp=term_timestamp,
+                )
 
         self.manual_tracker.on_track_terminated = _on_terminated
 

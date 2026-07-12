@@ -7,15 +7,13 @@ class SimpleRegistry:
 
     No embedding matching is performed. Each local_track_id is used directly as the identity key.
     The registry stores per track:
-      - smooth_embeddings: per-frame tracker moving-average appearance vectors
-      - occurrence_embeddings: per-frame raw detection embeddings from FrameData.features
+      - appearance_embeddings: per-frame raw detection embeddings from FrameData.features
       - compressed_track: serialised CompressedTrack dict (set via add_compressed_track)
     """
 
     def __init__(self) -> None:
         # local_track_id -> {
-        #   "smooth_embeddings": list[ndarray],     # tracker moving-average per frame
-        #   "occurrence_embeddings": list[ndarray], # raw detection feature per frame
+        #   "appearance_embeddings": list[ndarray], # raw detection feature per frame
         #   "compressed_track": dict | None         # serialised CompressedTrack
         # }
         self.identities: Dict[int, Dict[str, Any]] = {}
@@ -23,8 +21,7 @@ class SimpleRegistry:
     def update_track(
         self,
         local_track_id: int,
-        smooth_embedding: np.ndarray[Any, Any],
-        occurrence_embedding: np.ndarray[Any, Any],
+        appearance_embedding: np.ndarray[Any, Any],
         class_label: str = "unknown",
         feed_name: str = "",
         frame_number: int = 0,
@@ -35,8 +32,7 @@ class SimpleRegistry:
 
         Args:
             local_track_id: The tracker-assigned track ID, used directly as identity key.
-            smooth_embedding: The moving-average appearance vector maintained by the tracker.
-            occurrence_embedding: The raw detection embedding from FrameData.features for this frame.
+            appearance_embedding: The raw detection embedding from FrameData.features for this frame.
             class_label: Detected class name.
             feed_name: Source video feed identifier.
             frame_number: Current frame index.
@@ -48,16 +44,14 @@ class SimpleRegistry:
         """
         if local_track_id not in self.identities:
             self.identities[local_track_id] = {
-                "smooth_embeddings": [],
-                "occurrence_embeddings": [],
+                "appearance_embeddings": [],
                 "class_label": class_label,
                 "feed_name": feed_name,
                 "compressed_track": None,
             }
 
         entry = self.identities[local_track_id]
-        entry["smooth_embeddings"].append(smooth_embedding)
-        entry["occurrence_embeddings"].append(occurrence_embedding)
+        entry["appearance_embeddings"].append(appearance_embedding)
         entry["class_label"] = class_label
         entry["feed_name"] = feed_name
 
@@ -67,8 +61,7 @@ class SimpleRegistry:
         """Associate a serialized compressed track representation with the identity."""
         if local_track_id not in self.identities:
             self.identities[local_track_id] = {
-                "smooth_embeddings": [],
-                "occurrence_embeddings": [],
+                "appearance_embeddings": [],
                 "class_label": "unknown",
                 "feed_name": "",
                 "compressed_track": None,
@@ -89,14 +82,12 @@ class SimpleRegistry:
         """Return per-track stacked embeddings suitable for np.savez.
 
         Keys follow the pattern:
-          - ``occ_{track_id}``    — stacked raw occurrence embeddings, shape (N, D)
-          - ``smooth_{track_id}`` — stacked tracker moving-average embeddings, shape (N, D)
+          - ``app_{track_id}``    — stacked raw appearance embeddings, shape (N, D)
 
         Returns:
             Flat dict of str -> ndarray ready for ``np.savez(**result)``.
         """
         result: Dict[str, np.ndarray[Any, Any]] = {}
         for track_id, data in self.identities.items():
-            result[f"occ_{track_id}"] = np.array(data["occurrence_embeddings"], dtype=np.float32)
-            result[f"smooth_{track_id}"] = np.array(data["smooth_embeddings"], dtype=np.float32)
+            result[f"app_{track_id}"] = np.array(data["appearance_embeddings"], dtype=np.float32)
         return result

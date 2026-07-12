@@ -3,7 +3,6 @@ import torch
 from typing import Any, List, Optional
 
 from ultralytics.trackers.byte_tracker import BYTETracker, STrack
-from ultralytics.trackers.utils import matching
 from ultralytics.trackers.utils.stracks import parse_bboxes
 
 from .association.base import IoUCost
@@ -210,13 +209,14 @@ class EnhancedByteTracker(BYTETracker):
         costs = {"iou": iou_cost, "appearance": appearance_cost}
         weights = {"iou": self.iou_weight, "appearance": self.appearance_weight}
 
-        fused_cost = CostFusion.combine(costs, weights)
-        # Override missing feature pairs to pure iou_cost
-        if missing_mask is not None:
-            fused_cost = np.where(missing_mask, iou_cost, fused_cost)
-
-        # 4. Apply optional detection score fusion (matching standard ByteTrack behaviour)
-        if self.args.fuse_score:
-            fused_cost = matching.fuse_score(fused_cost, detections)
+        # Apply official score-appearance-IoU fusion (alpha weight for detection score)
+        fused_cost = CostFusion.combine(
+            costs=costs,
+            weights=weights,
+            detections=detections,
+            alpha=1.0 - self.appearance_weight,
+            missing_mask=missing_mask,
+            fuse_score=self.args.fuse_score,
+        )
 
         return fused_cost

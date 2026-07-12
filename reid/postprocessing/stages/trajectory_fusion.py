@@ -92,7 +92,7 @@ FusionMode = Literal["mean", "attention"]
 
 
 class TrajectoryFusionStage(PostProcessingStage):
-    """Fuse per-frame occurrence embeddings of a terminated track into one feature vector.
+    """Fuse per-frame appearance embeddings of a terminated track into one feature vector.
 
     Two modes are supported:
       - ``"mean"``: Simple mean pooling, fast and robust.
@@ -106,21 +106,17 @@ class TrajectoryFusionStage(PostProcessingStage):
         mode: Fusion strategy, one of ``"mean"`` or ``"attention"``.
         temperature: Softmax temperature for attention mode (lower → sharper).
             Has no effect in ``"mean"`` mode.
-        fallback_to_smooth: If True and ``occurrence_embeddings`` is None or empty,
-            fall back to ``track.smooth_embedding`` as the fused output.
     """
 
     def __init__(
         self,
         mode: FusionMode = "attention",
         temperature: float = 1.0,
-        fallback_to_smooth: bool = True,
     ) -> None:
         if mode not in ("mean", "attention"):
             raise ValueError(f"Unknown fusion mode {mode!r}. Choose 'mean' or 'attention'.")
         self.mode = mode
         self.temperature = temperature
-        self.fallback_to_smooth = fallback_to_smooth
 
     def process(self, track: TerminatedTrack) -> TerminatedTrack:
         """Fuse trajectory embeddings and store result in ``track.fused_embedding``.
@@ -131,13 +127,10 @@ class TrajectoryFusionStage(PostProcessingStage):
         Returns:
             The same track with ``fused_embedding`` populated.
         """
-        embeddings = track.occurrence_embeddings
+        embeddings = track.appearance_embeddings
 
         # Validate input
         if embeddings is None or len(embeddings) == 0:
-            if self.fallback_to_smooth and track.smooth_embedding is not None:
-                track.fused_embedding = _l2_normalize(track.smooth_embedding.astype(np.float32))
-            # Otherwise leave fused_embedding as None
             return track
 
         # Ensure float32 numpy array of shape (N, D)
@@ -147,6 +140,8 @@ class TrajectoryFusionStage(PostProcessingStage):
 
         if self.mode == "mean":
             track.fused_embedding = mean_fusion(embeddings)
+            with open("track.fused_embedding", "a") as f:
+                f.write(str(track.track_id) + ": " + np.linalg.norm(track.fused_embedding).__repr__() + "\n")
         else:
             track.fused_embedding = attention_fusion(embeddings, self.temperature)
 
@@ -155,6 +150,5 @@ class TrajectoryFusionStage(PostProcessingStage):
     def __repr__(self) -> str:
         return (
             f"TrajectoryFusionStage(mode={self.mode!r}, "
-            f"temperature={self.temperature}, "
-            f"fallback_to_smooth={self.fallback_to_smooth})"
+            f"temperature={self.temperature})"
         )
