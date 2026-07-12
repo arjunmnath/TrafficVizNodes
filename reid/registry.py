@@ -3,20 +3,20 @@ from typing import Dict, List, Optional, Any
 
 
 class SimpleRegistry:
-    """Identity registry that maps local track IDs to appearance vectors and occurrences.
+    """Identity registry that maps local track IDs to appearance vectors.
 
     No embedding matching is performed. Each local_track_id is used directly as the identity key.
     The registry stores per track:
       - smooth_embeddings: per-frame tracker moving-average appearance vectors
       - occurrence_embeddings: per-frame raw detection embeddings from FrameData.features
-      - occurrences: list of occurrence metadata records (frame, timestamp, bbox, class, feed)
+      - compressed_track: serialised CompressedTrack dict (set via add_compressed_track)
     """
 
     def __init__(self) -> None:
         # local_track_id -> {
         #   "smooth_embeddings": list[ndarray],     # tracker moving-average per frame
         #   "occurrence_embeddings": list[ndarray], # raw detection feature per frame
-        #   "occurrences": list[dict]               # metadata records per observation
+        #   "compressed_track": dict | None         # serialised CompressedTrack
         # }
         self.identities: Dict[int, Dict[str, Any]] = {}
 
@@ -50,30 +50,37 @@ class SimpleRegistry:
             self.identities[local_track_id] = {
                 "smooth_embeddings": [],
                 "occurrence_embeddings": [],
-                "occurrences": [],
+                "class_label": class_label,
+                "feed_name": feed_name,
+                "compressed_track": None,
             }
 
         entry = self.identities[local_track_id]
         entry["smooth_embeddings"].append(smooth_embedding)
         entry["occurrence_embeddings"].append(occurrence_embedding)
-        entry["occurrences"].append(
-            {
-                "class_label": class_label,
-                "feed_name": feed_name,
-                "frame": int(frame_number),
-                "timestamp_seconds": float(timestamp),
-                "bbox": list(map(float, bbox)) if bbox is not None else [],
-            }
-        )
+        entry["class_label"] = class_label
+        entry["feed_name"] = feed_name
 
         return local_track_id
 
+    def add_compressed_track(self, local_track_id: int, compressed_track_dict: Dict[str, Any]) -> None:
+        """Associate a serialized compressed track representation with the identity."""
+        if local_track_id not in self.identities:
+            self.identities[local_track_id] = {
+                "smooth_embeddings": [],
+                "occurrence_embeddings": [],
+                "class_label": "unknown",
+                "feed_name": "",
+                "compressed_track": None,
+            }
+        self.identities[local_track_id]["compressed_track"] = compressed_track_dict
+
     def get_results_summary(self) -> List[Dict[str, Any]]:
-        """Return a JSON-serialisable summary of all track identities and their occurrences."""
+        """Return a JSON-serialisable summary of all track identities and their compressed track details."""
         return [
             {
                 "track_id": track_id,
-                "occurrences": data["occurrences"],
+                "compressed_track": data.get("compressed_track"),
             }
             for track_id, data in self.identities.items()
         ]

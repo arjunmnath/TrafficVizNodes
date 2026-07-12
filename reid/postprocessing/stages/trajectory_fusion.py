@@ -8,7 +8,7 @@ scaled dot-product self-attention fusion.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Any
 
 import numpy as np
 
@@ -21,13 +21,13 @@ from reid.postprocessing.pipeline import TerminatedTrack
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def _l2_normalize(v: np.ndarray) -> np.ndarray:
+def _l2_normalize(v: np.ndarray[Any, Any]) -> np.ndarray[Any, Any]:
     """L2-normalize along the last axis."""
     norm = np.linalg.norm(v, axis=-1, keepdims=True)
-    return v / (norm + 1e-8)
+    return v / (norm + 1e-8)  # type: ignore[no-any-return]
 
 
-def mean_fusion(embeddings: np.ndarray) -> np.ndarray:
+def mean_fusion(embeddings: np.ndarray[Any, Any]) -> np.ndarray[Any, Any]:
     """Average all frame embeddings into a single prototype.
 
     Args:
@@ -39,7 +39,7 @@ def mean_fusion(embeddings: np.ndarray) -> np.ndarray:
     return _l2_normalize(embeddings.mean(axis=0))
 
 
-def attention_fusion(embeddings: np.ndarray, temperature: float = 1.0) -> np.ndarray:
+def attention_fusion(embeddings: np.ndarray[Any, Any], temperature: float = 1.0) -> np.ndarray[Any, Any]:
     """Aggregate embeddings via scaled dot-product self-attention.
 
     Each frame embedding attends over all others to produce a context-weighted

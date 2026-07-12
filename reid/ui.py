@@ -11,7 +11,7 @@ import re
 import time
 import psutil
 import torch
-from typing import Dict, List
+from typing import Dict
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -207,7 +207,7 @@ class RichUIListener(ReIDPipelineListener):
         self.stop_keyboard_listener()
         summary = {feed_name: reg.get_results_summary() for feed_name, reg in registries.items()}
         console.print(
-            f"\n[bold yellow]Saving simple registry occurrences to:[/bold yellow] {output_path}"
+            f"\n[bold yellow]Saving registry to:[/bold yellow] {output_path}"
         )
 
         console.print("\n")
@@ -236,35 +236,23 @@ class RichUIListener(ReIDPipelineListener):
             summary_table = Table(box=box.HEAVY_EDGE, expand=True)
             summary_table.add_column("Track ID", style="bold yellow", justify="center")
             summary_table.add_column("Class Label", style="cyan")
-            summary_table.add_column("Total Occurrences", justify="center", style="bold green")
-            summary_table.add_column("Frames Observed", style="white")
-            summary_table.add_column("Video Sources Occurrences", style="white")
+            summary_table.add_column("Start Time", justify="center", style="bold green")
+            summary_table.add_column("End Time", justify="center", style="bold green")
+            summary_table.add_column("Camera", style="white")
 
             for item in feed_summary:
                 g_id = item["track_id"]
-                occs = item["occurrences"]
+                comp_track = item.get("compressed_track")
 
-                # Count occurrences and gather frame details per video source
-                vid_counts: Dict[str, int] = {}
-                vid_frames: Dict[str, List[str]] = {}
-                for o in occs:
-                    v = o["feed_name"]
-                    vid_counts[v] = vid_counts.get(v, 0) + 1
-                    if v not in vid_frames:
-                        vid_frames[v] = []
-                    frame = o.get("frame")
-                    ts = o.get("timestamp_seconds")
-                    if frame is not None and ts is not None:
-                        vid_frames[v].append(f"F{frame} ({ts:.1f}s)")
+                if comp_track:
+                    cls = comp_track.get("class", "unknown")
+                    camera = comp_track.get("camera", "")
+                    start_t = f"{comp_track.get('start_time', 0.0):.2f}s"
+                    end_t = f"{comp_track.get('end_time', 0.0):.2f}s"
+                else:
+                    cls, camera, start_t, end_t = "unknown", "", "-", "-"
 
-                source_info = ", ".join(
-                    [f"[bold cyan]{v}[/bold cyan]: {c} occurrences" for v, c in vid_counts.items()]
-                )
-                frame_info = ", ".join(
-                    [f"[bold cyan]{v}[/bold cyan]: {', '.join(f)}" for v, f in vid_frames.items()]
-                )
-                cls = occs[0]["class_label"] if occs else "unknown"
-                summary_table.add_row(f"{g_id:03d}", cls, str(len(occs)), frame_info, source_info)
+                summary_table.add_row(f"{g_id:03d}", cls, start_t, end_t, camera)
 
             console.print(summary_table)
 
@@ -486,12 +474,14 @@ class RichUIListener(ReIDPipelineListener):
         visible_ids = sorted_ids[self.registry_offset : self.registry_offset + reg_height]
 
         for gid, data in visible_ids:
-            occs = data["occurrences"]
-            row = [f"ID {gid:03d}", occs[-1]["class_label"] if occs else "unknown"]
+            comp_track = data.get("compressed_track")
+            cls = data.get("class_label", "unknown")
+            feed = data.get("feed_name", "")
+            n_smooth = len(data.get("smooth_embeddings", []))
+            row = [f"ID {gid:03d}", cls]
             for v_name in self.video_names:
-                count = sum(1 for o in occs if o["feed_name"] == v_name)
-                row.append(str(count))
-            row.append(str(len(occs)))
+                row.append(str(n_smooth) if v_name == feed else "0")
+            row.append(str(n_smooth))
             table.add_row(*row)
 
         reg_title = "[bold green]Live Global Registry[/bold green]"
@@ -599,7 +589,7 @@ class HeadlessUIListener(ReIDPipelineListener):
 
     def on_pipeline_end(self, registries: Dict[str, SimpleRegistry], output_path: str):
         summary = {feed_name: reg.get_results_summary() for feed_name, reg in registries.items()}
-        print(f"[{time.strftime('%H:%M:%S')}] Saving simple registry occurrences to: {output_path}")
+        print(f"[{time.strftime('%H:%M:%S')}] Saving registry to: {output_path}")
 
         print("\n=============================================")
         print("DMT RE-IDENTIFICATION FINAL MATCHING REPORT")
@@ -610,34 +600,22 @@ class HeadlessUIListener(ReIDPipelineListener):
             for feed_name, feed_summary in summary.items():
                 print(f"\nFeed Source: {feed_name}")
                 print("---------------------------------------------")
-                print("Registered Identities & Occurrence Details:")
+                print("Registered Identities & Track Details:")
                 if not feed_summary:
                     print("  No identities registered for this feed.")
                     continue
                 for item in feed_summary:
                     g_id = item["track_id"]
-                    occs = item["occurrences"]
-                    cls = occs[0]["class_label"] if occs else "unknown"
+                    comp_track = item.get("compressed_track")
 
-                    vid_counts: Dict[str, int] = {}
-                    vid_frames: Dict[str, List[str]] = {}
-                    for o in occs:
-                        v = o["feed_name"]
-                        vid_counts[v] = vid_counts.get(v, 0) + 1
-                        if v not in vid_frames:
-                            vid_frames[v] = []
-                        frame = o.get("frame")
-                        ts = o.get("timestamp_seconds")
-                        if frame is not None and ts is not None:
-                            vid_frames[v].append(f"F{frame} ({ts:.1f}s)")
-
-                    source_info = " | ".join(
-                        [
-                            f"{v}: {c} occurrences [{', '.join(vid_frames[v])}]"
-                            for v, c in vid_counts.items()
-                        ]
-                    )
-                    print(
-                        f"  Track {g_id:03d} ({cls}): {len(occs)} total occurrences | {source_info}"
-                    )
+                    if comp_track:
+                        cls = comp_track.get("class", "unknown")
+                        camera = comp_track.get("camera", "")
+                        start_t = comp_track.get("start_time", 0.0)
+                        end_t = comp_track.get("end_time", 0.0)
+                        print(
+                            f"  Track {g_id:03d} ({cls}) | camera={camera} | {start_t:.2f}s – {end_t:.2f}s"
+                        )
+                    else:
+                        print(f"  Track {g_id:03d}: no compressed track available")
         print("=============================================\n")

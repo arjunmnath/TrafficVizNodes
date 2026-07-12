@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """
-Cosine similarity analysis script to compare feature embeddings of occurrences between tracked global IDs and output statistics and heatmaps.
-Reads the ReID pipeline JSON tracker output, computes pairwise cosine similarities, and saves a heatmap plot.
-Supports comparing a single global ID, two global IDs, or multiple global IDs.
+Cosine similarity analysis script to compare feature embeddings between tracked
+global IDs and output statistics and heatmaps.
+
+Reads the ReID pipeline registry JSON and NPZ embeddings, computes pairwise
+cosine similarities, and saves a heatmap plot.
+
+Tracks are identified by "{feed}:{track_id}" keys.
+Supports comparing one or more tracks.
 """
 
 import argparse
@@ -20,8 +25,13 @@ from rich.table import Table
 console = Console()
 
 
-def load_occurrences_by_id(json_path: Path) -> dict[str, list[dict]]:
-    """Loads and parses the tracker output JSON file, indexing occurrences by global_id."""
+def load_tracks_by_key(json_path: Path) -> dict[str, dict]:
+    """Load the registry JSON and return a flat mapping:
+
+        "{feed_name}:{track_id}" -> compressed_track dict
+
+    Tracks with a null compressed_track are silently skipped.
+    """
     if not json_path.exists():
         console.print(f"[bold red]Error: JSON file not found at {json_path}[/bold red]")
         sys.exit(1)
@@ -33,49 +43,45 @@ def load_occurrences_by_id(json_path: Path) -> dict[str, list[dict]]:
         console.print(f"[bold red]Error: Failed to read or parse JSON file: {e}[/bold red]")
         sys.exit(1)
 
-    # Normalize format to: dict mapping global ID (str) to list of occurrences
-    by_id = {}
-    if isinstance(data, list):
-        for item in data:
-            if "global_id" in item:
-                gid = str(item["global_id"])
-                by_id[gid] = item.get("occurrences", [])
-    elif isinstance(data, dict):
-        by_id = {str(k): v for k, v in data.items()}
-    else:
-        console.print("[bold red]Error: Unsupported JSON format. Expected list or dict.[/bold red]")
+    if not isinstance(data, dict):
+        console.print("[bold red]Error: Unsupported JSON format. Expected a dict keyed by feed name.[/bold red]")
         sys.exit(1)
 
-    return by_id
+    by_key: dict[str, dict] = {}
+    for feed_name, tracks_list in data.items():
+        for entry in tracks_list:
+            tid         = entry["track_id"]
+            comp_track  = entry.get("compressed_track")
+            if comp_track is None:
+                continue
+            key = f"{feed_name}:{tid}"
+            by_key[key] = comp_track
+
+    return by_key
 
 
-def extract_embeddings_and_labels(
-    occs: list[dict], global_id: str, embeddings_dict: dict = None
+def extract_embeddings_for_key(
+    key: str,
+    npz: "np.lib.npyio.NpzFile",
+    embedding_type: str = "smooth",
 ) -> tuple[np.ndarray, list[str]]:
-    """Extracts embeddings and creates human-readable labels for a list of occurrences."""
-    labels = []
-    for occ in occs:
-        video = occ.get("feed_name", "unknown")
-        frame = occ.get("frame", 0)
-        timestamp = occ.get("timestamp_seconds", 0.0)
-        labels.append(f"ID {global_id} | {video} | F{frame} ({timestamp:.1f}s)")
+    """Extract the embedding matrix and human-readable labels for one track key.
 
-    embeddings = None
-    if embeddings_dict is not None and global_id in embeddings_dict:
-        embeddings = embeddings_dict[global_id]
-    else:
-        # Fallback to checking occurrence dictionary if stored there (backward compatibility)
-        embeddings_list = []
-        for occ in occs:
-            emb = occ.get("embedding", None)
-            if emb is not None:
-                embeddings_list.append(emb)
-        if embeddings_list:
-            embeddings = np.array(embeddings_list, dtype=np.float32)
+    key format: "{feed_name}:{track_id}"
+    NPZ key format: "{feed_name}_{embedding_type}_{track_id}"
+    """
+    feed_name, track_id_str = key.split(":", 1)
+    npz_key = f"{feed_name}_{embedding_type}_{track_id_str}"
 
-    if embeddings is None or len(embeddings) == 0:
+    if npz_key not in npz:
         return np.empty((0, 0)), []
 
+    embeddings = npz[npz_key].astype(np.float32)
+    if embeddings.ndim == 1:
+        embeddings = embeddings[np.newaxis, :]
+
+    n = len(embeddings)
+    labels = [f"{key} | frame {i}" for i in range(n)]
     return embeddings, labels
 
 
@@ -91,53 +97,46 @@ def compute_pairwise_cosine_similarity(all_embeddings: np.ndarray) -> np.ndarray
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Compare embeddings of occurrences for one or more global IDs and plot similarities."
+        description="Compare embeddings for one or more tracks and plot cosine similarity heatmap."
     )
     parser.add_argument(
-        "--json_path",
-        "-j",
-        type=str,
-        required=True,
-        help="Path to ReID pipeline tracker JSON output file.",
+        "--json_path", "-j", type=str, required=True,
+        help="Path to the registry JSON produced by run_reid_pipeline.py.",
     )
     parser.add_argument(
-        "--ids",
-        type=str,
-        nargs="+",
-        help="List of global IDs to compare (e.g. --ids 1 or --ids 1 2 or --ids 1 2 3).",
+        "--npz_path", "-n", type=str, default=None,
+        help="Path to the NPZ embeddings file. Defaults to <json_path>.npz.",
     )
     parser.add_argument(
-        "--id1",
-        type=str,
-        help="First global ID to compare (deprecated, use --ids instead).",
+        "--ids", type=str, nargs="+",
+        help=(
+            "Track keys to compare, in the format 'feed_name:track_id' "
+            "(e.g. --ids clip1.mp4:1 clip1.mp4:3 clip2.mp4:2)."
+        ),
     )
     parser.add_argument(
-        "--id2",
-        type=str,
-        help="Second global ID to compare (deprecated, use --ids instead).",
+        "--embedding-type", "-e",
+        choices=["occ", "smooth"], default="smooth",
+        help="Which embeddings to use: 'occ' = raw per-frame; 'smooth' = moving-average.",
     )
     parser.add_argument(
-        "--output_plot",
-        "-o",
-        type=str,
-        default="similarity_matrix.png",
-        help="Output filepath for the similarity matrix heatmap visualization.",
+        "--output_plot", "-o", type=str, default="similarity_matrix.png",
+        help="Output filepath for the similarity heatmap.",
     )
     parser.add_argument(
-        "--cmap",
-        type=str,
-        default="coolwarm",
-        help="Matplotlib colormap to use (e.g. coolwarm, viridis, plasma, RdYlBu).",
+        "--cmap", type=str, default="coolwarm",
+        help="Matplotlib colormap (e.g. coolwarm, viridis, plasma).",
     )
     parser.add_argument(
-        "--show",
-        "-s",
-        action="store_true",
+        "--show", "-s", action="store_true",
         help="Show the interactive plot window before saving.",
     )
+    # Deprecated legacy flags — still accepted for compatibility
+    parser.add_argument("--id1", type=str, help=argparse.SUPPRESS)
+    parser.add_argument("--id2", type=str, help=argparse.SUPPRESS)
     args = parser.parse_args()
 
-    # Determine targeted IDs
+    # Determine target track keys
     target_ids = []
     if args.ids:
         target_ids = [str(x) for x in args.ids]
@@ -149,70 +148,71 @@ def main() -> None:
 
     if not target_ids:
         console.print(
-            "[bold red]Error: No global IDs specified. Please use --ids, or --id1/--id2.[/bold red]"
+            "[bold red]Error: No track keys specified. Use --ids feed:track_id ...[/bold red]"
         )
         sys.exit(1)
 
-    # Resolve input JSON path
+    # Resolve JSON path
     json_path = Path(args.json_path)
     if not json_path.exists():
-        # Fallback to workspace root folder if path was relative
         script_dir = Path(__file__).resolve().parent
         workspace_root = script_dir.parent
-        fallback_path = workspace_root / args.json_path
-        if fallback_path.exists():
-            json_path = fallback_path
+        fallback = workspace_root / args.json_path
+        if fallback.exists():
+            json_path = fallback
 
-    console.print(f"[bold cyan]Loading data from:[/bold cyan] {json_path}")
-    by_id = load_occurrences_by_id(json_path)
+    console.print(f"[bold cyan]Loading registry from:[/bold cyan] {json_path}")
+    by_key = load_tracks_by_key(json_path)
 
-    # Resolve and load NPZ file if it exists
-    embeddings_dict = {}
-    npz_path = json_path.with_suffix(".npz")
-    if npz_path.exists():
-        try:
-            embeddings_dict = np.load(npz_path)
-        except Exception as e:
-            console.print(f"[bold red]Warning: Failed to load embeddings NPZ file: {e}[/bold red]")
+    # Resolve and load NPZ
+    npz_path = Path(args.npz_path) if args.npz_path else json_path.with_suffix(".npz")
+    if not npz_path.exists():
+        console.print(f"[bold red]Error: NPZ file not found: {npz_path}[/bold red]")
+        sys.exit(1)
+    try:
+        npz = np.load(npz_path)
+    except Exception as e:
+        console.print(f"[bold red]Error: Failed to load NPZ: {e}[/bold red]")
+        sys.exit(1)
 
-    # Validate all IDs exist in dataset
-    available_ids = sorted(list(by_id.keys()), key=lambda x: int(x) if x.isdigit() else x)
-    for gid in target_ids:
-        if gid not in by_id:
-            console.print(
-                f"[bold red]Error: Global ID '{gid}' not found in the dataset.[/bold red]"
-            )
-            console.print(f"Available IDs: {available_ids}")
+    embedding_type = getattr(args, "embedding_type", "smooth")
+
+    # Validate all keys exist
+    available_keys = sorted(by_key.keys())
+    for key in target_ids:
+        if key not in by_key:
+            console.print(f"[bold red]Error: Track key '{key}' not found in registry.[/bold red]")
+            console.print(f"Available keys: {available_keys}")
             sys.exit(1)
 
-    # Load and process embeddings per ID
-    id_occs = {}
+    # Load and process embeddings per track key
     all_embeddings_list = []
     all_labels = []
-    id_indices = {}  # Map gid -> (start_idx, end_idx)
+    id_indices: dict[str, tuple[int, int]] = {}
 
     current_idx = 0
-    for gid in target_ids:
-        occs = by_id[gid]
-        # Sort chronologically (by video, then frame number)
-        occs = sorted(occs, key=lambda x: (x.get("feed_name", ""), x.get("frame", 0)))
-        id_occs[gid] = occs
-
-        embs, labels = extract_embeddings_and_labels(occs, gid, embeddings_dict)
+    for key in target_ids:
+        embs, labels = extract_embeddings_for_key(key, npz, embedding_type)
         n = len(embs)
+        comp_track = by_key[key]
+        cls        = comp_track.get("class", "?")
+        start_t    = comp_track.get("start_time", 0.0)
+        end_t      = comp_track.get("end_time", 0.0)
         console.print(
-            f"[bold green]Global ID {gid}:[/bold green] Found {n} occurrences with embeddings."
+            f"[bold green]{key}[/bold green] ({cls}, {start_t:.2f}s–{end_t:.2f}s): "
+            f"Found {n} embedding frames."
         )
 
         if n == 0:
             console.print(
-                f"[bold red]Error: Global ID '{gid}' has zero occurrences with embeddings.[/bold red]"
+                f"[bold red]Error: Track '{key}' has zero embeddings in NPZ (key: "
+                f"{key.split(':')[0]}_{embedding_type}_{key.split(':')[1]}).[/bold red]"
             )
             sys.exit(1)
 
         all_embeddings_list.append(embs)
         all_labels.extend(labels)
-        id_indices[gid] = (current_idx, current_idx + n)
+        id_indices[key] = (current_idx, current_idx + n)
         current_idx += n
 
     total_occs = len(all_labels)
@@ -398,7 +398,7 @@ def main() -> None:
     # Title & Colorbar
     ids_title_str = ", ".join(target_ids)
     plt.title(
-        f"Pairwise Embedding Cosine Similarity Heatmap\nGlobal IDs: {ids_title_str} ({total_occs} total occurrences)",
+        f"Pairwise Embedding Cosine Similarity Heatmap\nTracks: {ids_title_str} ({total_occs} total frames)",
         fontsize=14,
         weight="bold",
         pad=20,

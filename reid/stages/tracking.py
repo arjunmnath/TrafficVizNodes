@@ -55,11 +55,9 @@ class TrackingStage(PipelineStage):
                         import numpy as np
 
                         occurrence_embeddings = np.array(occ_list, dtype=np.float32)
-                    # Pull feed_name and class_label from last occurrence record
-                    occs = entry.get("occurrences", [])
-                    if occs:
-                        feed_name = occs[-1].get("feed_name", "")
-                        class_label = occs[-1].get("class_label", "unknown")
+                    # Pull feed_name and class_label from registry attributes directly
+                    feed_name = entry.get("feed_name", "")
+                    class_label = entry.get("class_label", "unknown")
 
             terminated = TerminatedTrack(
                 track_id=track.track_id,
@@ -75,6 +73,13 @@ class TrackingStage(PipelineStage):
 
             # Store the postprocessed track back so downstream stages can read it
             track.postprocessed = terminated
+
+            if hasattr(pipeline, "registry") and pipeline.registry is not None:
+                compressed_track = getattr(terminated, "compressed_track", None)
+                if compressed_track is not None:
+                    from tracking.serialization import JsonSerializer
+                    serialized_dict = JsonSerializer.serialize_to_dict(compressed_track)
+                    pipeline.registry.add_compressed_track(track.track_id, serialized_dict)
 
         self.manual_tracker.on_track_terminated = _on_terminated
 

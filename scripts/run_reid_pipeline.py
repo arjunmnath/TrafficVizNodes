@@ -27,6 +27,7 @@ from reid import (
 from reid.postprocessing import (
     PostProcessingPipeline,
     TrajectoryFusionStage,
+    TrajectoryCompressionStage,
 )
 
 from reid.stages import (
@@ -118,8 +119,8 @@ def main():
     parser.add_argument(
         "--fusion-mode",
         type=str,
-        default="attention",
-        choices=["mean", "attention", "none"],
+        default="mean",
+        choices=["mean", "attention"],
         dest="fusion_mode",
         help="Trajectory fusion mode for the postprocessing pipeline: "
         "'mean' = simple mean pooling, "
@@ -170,14 +171,11 @@ def main():
     )
 
     # Build postprocessing pipeline
-    if args.fusion_mode != "none":
-        postprocessing_pipeline = PostProcessingPipeline(
-            [
-                TrajectoryFusionStage(mode=args.fusion_mode),
-            ]
-        )
-    else:
-        postprocessing_pipeline = None
+    postprocessing_stages = [
+        TrajectoryFusionStage(mode=args.fusion_mode),
+        TrajectoryCompressionStage()
+    ]
+    postprocessing_pipeline = PostProcessingPipeline(postprocessing_stages)
 
     stages = [
         VideoFeederStage(),
@@ -223,4 +221,22 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    from rich.console import Console
+
+    console = Console()
+
+    try:
+        main()
+    except Exception:
+        # Safely shut down any active Rich Live display to prevent terminal garbling
+        import rich.live
+        import gc
+
+        for obj in gc.get_objects():
+            if isinstance(obj, rich.live.Live):
+                try:
+                    obj.stop()
+                except Exception:
+                    pass
+        console.print_exception(show_locals=True)
+        raise

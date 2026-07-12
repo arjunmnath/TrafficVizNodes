@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 from .base import PostProcessingStage
+from tracking.domain.track import CompressedTrack
 
 
 @dataclass
@@ -39,16 +40,19 @@ class TerminatedTrack:
     feed_name: str = ""
 
     # Raw per-frame embeddings collected by the registry during the track's lifetime
-    occurrence_embeddings: Optional[np.ndarray] = None  # shape (N, D)
+    occurrence_embeddings: Optional[np.ndarray[Any, Any]] = None  # shape (N, D)
 
     # Tracker's final smoothed embedding at termination time
-    smooth_embedding: Optional[np.ndarray] = None  # shape (D,)
+    smooth_embedding: Optional[np.ndarray[Any, Any]] = None  # shape (D,)
 
     # Set by TrajectoryFusionStage
-    fused_embedding: Optional[np.ndarray] = None  # shape (D,)
+    fused_embedding: Optional[np.ndarray[Any, Any]] = None  # shape (D,)
 
     # Tracker history (frames, timestamps, bboxes)
     history: Optional[Dict[str, Any]] = None
+
+    # Set by TrajectoryCompressionStage
+    compressed_track: Optional[CompressedTrack] = None
 
     # Open-ended store for stage outputs
     extra: Dict[str, Any] = field(default_factory=dict)

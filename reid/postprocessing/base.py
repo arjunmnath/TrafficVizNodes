@@ -4,6 +4,10 @@ Abstract base class for all postprocessing stages.
 """
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .pipeline import TerminatedTrack
 
 
 class PostProcessingStage(ABC):

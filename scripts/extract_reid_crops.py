@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 """
-Image crop extractor to retrieve bounding-box crops of person and vehicle identities from video sources using tracking JSON outputs.
-Filters occurrences by a minimum time gap threshold to extract diverse representation crops for each identity.
+Image crop extractor to retrieve bounding-box crops of person and vehicle identities
+from video sources using the compressed-track registry JSON.
+
+Instead of per-frame occurrence records, crops are derived by sampling the compressed
+trajectory at a configurable time interval, reconstructing the bounding box via
+BBoxReconstructor, and seeking to the nearest video frame.
 """
 
 import argparse
@@ -13,72 +17,110 @@ from collections import defaultdict
 from pathlib import Path
 
 import cv2
+from rich import box
 from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
-from rich.text import Text
-from rich.live import Live
 from rich.layout import Layout
+from rich.live import Live
+from rich.panel import Panel
 from rich.progress import (
-    Progress,
     BarColumn,
-    TextColumn,
+    Progress,
     TaskProgressColumn,
     TimeElapsedColumn,
     TimeRemainingColumn,
+    TextColumn,
 )
-from rich import box
+from rich.table import Table
+from rich.text import Text
 
 MIN_TIME_GAP_SECONDS = 3.0
 workspace_root = Path(__file__).resolve().parent.parent
 
+# Add repo root to path so we can import tracking modules
+if str(workspace_root) not in sys.path:
+    sys.path.insert(0, str(workspace_root))
 
-def should_keep_detections(
-    data: dict,
-    min_time_gap_seconds: float,
-) -> dict[str, list[dict]]:
+from tracking.serialization.json_deserializer import JsonDeserializer
+from tracking.compression.reconstruction import BBoxReconstructor
+
+
+def sample_track_detections(
+    comp_track_dict: dict,
+    time_gap: float,
+) -> list[dict]:
     """
-    Filter detections so that for each global identity:
-      - first occurrence from every camera is kept
-      - subsequent occurrences from the same camera are only kept
-        if sufficiently far apart in time
+    Sample the compressed track at regular time intervals and return a list of
+    synthetic detection records compatible with the rest of the pipeline.
+
+    Each record contains:
+        feed_name, track_id, timestamp_seconds, frame (nearest), bbox [x1,y1,x2,y2]
     """
+    try:
+        track = JsonDeserializer.deserialize_from_dict(comp_track_dict)
+    except Exception:
+        return []
 
-    filtered: dict[str, list[dict]] = {}
+    t_start = track.metadata.start_timestamp
+    t_end   = track.metadata.end_timestamp
+    feed    = track.metadata.camera_id
+    tid     = track.metadata.track_id
 
-    for global_id, detections in data.items():
-        by_video: dict[str, list[dict]] = defaultdict(list)
+    detections = []
 
-        for det in detections:
-            by_video[det["feed_name"]].append(det)
+    if time_gap <= 0:
+        # Sample all frames of the track
+        for frame_idx, frame_t in zip(track.time_model.frames, track.time_model.timestamps):
+            try:
+                x1, y1, x2, y2 = BBoxReconstructor.reconstruct(track, frame_t)
+            except Exception:
+                continue
+            detections.append({
+                "feed_name":         feed,
+                "track_id":          tid,
+                "timestamp_seconds": frame_t,
+                "frame":             int(frame_idx),
+                "bbox":              [x1, y1, x2, y2],
+            })
+        return detections
 
-        kept: list[dict] = []
+    # Sample with a time gap
+    t = t_start
+    sampled_frames = set()
+    while t <= t_end + 1e-9:
+        try:
+            x1, y1, x2, y2 = BBoxReconstructor.reconstruct(track, t)
+        except Exception:
+            t += time_gap
+            continue
 
-        for video_name, video_dets in by_video.items():
-            video_dets.sort(
-                key=lambda x: (
-                    x.get("timestamp_seconds", 0.0),
-                    x["frame"],
-                )
-            )
+        # Get nearest frame and its actual timestamp
+        frame_idx = int(track.time_model.timestamp_to_frame(t))
 
-            last_saved_time: float | None = None
+        if frame_idx in sampled_frames:
+            t += max(time_gap, 0.1)
+            continue
 
-            for det in video_dets:
-                current_time = float(det.get("timestamp_seconds", 0.0))
+        frame_t = track.time_model.frame_to_timestamp(frame_idx)
+        
+        # Reconstruct at actual frame timestamp for maximum coordinate accuracy
+        try:
+            x1, y1, x2, y2 = BBoxReconstructor.reconstruct(track, frame_t)
+        except Exception:
+            pass
 
-                if last_saved_time is None:
-                    kept.append(det)
-                    last_saved_time = current_time
-                    continue
+        detections.append({
+            "feed_name":         feed,
+            "track_id":          tid,
+            "timestamp_seconds": frame_t,
+            "frame":             frame_idx,
+            "bbox":              [x1, y1, x2, y2],
+        })
+        sampled_frames.add(frame_idx)
+        
+        # Next sample target is at least time_gap after the actual frame's timestamp
+        t = frame_t + time_gap
 
-                if current_time - last_saved_time >= min_time_gap_seconds:
-                    kept.append(det)
-                    last_saved_time = current_time
-
-        filtered[global_id] = kept
-
-    return filtered
+    return detections
 
 
 def extract_reid_crops(
@@ -90,24 +132,20 @@ def extract_reid_crops(
     global_ids: list[int] | None = None,
     matches_path: str | None = None,
 ) -> None:
-    json_path = Path(json_path)
-    video_dir = Path(video_dir)
+    json_path  = Path(json_path)
+    video_dir  = Path(video_dir)
     output_dir = Path(output_dir)
 
     console = Console()
 
-    # Track statistics
     stats = {
-        "Unique IDs": 0,
-        "Raw Detections": 0,
-        "Filtered Detections": 0,
-        "IDs in V1 & V2": 0,
-        "Extracted Crops": 0,
-        "Missing Videos": 0,
-        "Frame Errors": 0,
+        "Unique Tracks":    0,
+        "Sampled Frames":   0,
+        "Extracted Crops":  0,
+        "Missing Videos":   0,
+        "Frame Errors":     0,
     }
 
-    # Store last N activity logs
     activity_log: list[str] = []
 
     def log_event(tag: str, message: str, style: str):
@@ -131,11 +169,10 @@ def extract_reid_crops(
             return
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    log_event("SYSTEM", f"Output directory set to: [cyan]{output_dir}[/cyan]", "cyan")
 
     try:
         with open(json_path, "r") as f:
-            track_details = json.load(f)
+            registry = json.load(f)
     except Exception as e:
         log_event("ERROR", f"Failed to load JSON file: {e}", "red")
         if headless:
@@ -144,145 +181,114 @@ def extract_reid_crops(
             console.print(f"[bold red]Error: Failed to load JSON: {e}[/bold red]")
             return
 
-    # Build track occurrences dictionary mapping (feed_name, track_id) -> occurrences
-    tracks_map = {}
-    if isinstance(track_details, dict):
-        for feed_name, tracks_list in track_details.items():
-            for t in tracks_list:
-                tid = t["track_id"]
-                occs = t.get("occurrences", [])
-                for occ in occs:
-                    occ["local_track_id"] = tid
-                    occ["similarity"] = 1.0
-                tracks_map[(feed_name, tid)] = occs
-    elif isinstance(track_details, list):
-        # Fallback if track_details is already formatted as global list
-        for item in track_details:
-            gid = item.get("global_id", item.get("track_id", 0))
-            occs = item.get("occurrences", [])
-            for occ in occs:
-                occ["local_track_id"] = occ.get("local_track_id", gid)
-                occ["similarity"] = occ.get("similarity", 1.0)
-            tracks_map[(occs[0].get("feed_name", "unknown") if occs else "unknown", gid)] = occs
+    # ── Build (feed_name, track_id) → comp_track_dict map ────────────────────
+    # JSON structure: {feed_name: [{track_id, compressed_track}, ...]}
+    tracks_map: dict[tuple[str, int], dict] = {}
+    if isinstance(registry, dict):
+        for feed_name, tracks_list in registry.items():
+            for entry in tracks_list:
+                tid          = entry["track_id"]
+                comp_track   = entry.get("compressed_track")
+                if comp_track is None:
+                    continue
+                tracks_map[(feed_name, tid)] = comp_track
+    else:
+        log_event("ERROR", "Unexpected JSON format — expected a dict keyed by feed name.", "red")
+        if headless:
+            sys.exit(1)
+        return
 
-    # Connected components using Union-Find to group matched tracks
-    parent = {}
+    # ── Load matches and perform greedy 1-to-1 matching ──────────────────────
+    resolved_matches_path = None
+    if matches_path:
+        resolved_matches_path = Path(matches_path)
+    else:
+        # Default to output.json in the current working directory or workspace root
+        for path_opt in [Path("output.json"), workspace_root / "output.json"]:
+            if path_opt.exists():
+                resolved_matches_path = path_opt
+                break
 
-    def find(x):
-        if parent[x] != x:
-            parent[x] = find(parent[x])
-        return parent[x]
+    matched_nodes = set()
+    matched_groups = []
 
-    def union(x, y):
-        rx = find(x)
-        ry = find(y)
-        if rx != ry:
-            parent[ry] = rx
-
-    # Initialize nodes
-    for key in tracks_map.keys():
-        parent[key] = key
-
-    # Map to store matching similarity for each track node
-    node_similarity = {}
-
-    if matches_path and Path(matches_path).exists():
-        log_event(
-            "SYSTEM", f"Loading matches from matches JSON: [cyan]{matches_path}[/cyan]", "cyan"
-        )
+    if resolved_matches_path and resolved_matches_path.exists():
+        log_event("SYSTEM", f"Loading matches from: [cyan]{resolved_matches_path}[/cyan]", "cyan")
         try:
-            with open(matches_path, "r") as f:
+            with open(resolved_matches_path) as f:
                 matches_data = json.load(f)
-            for match in matches_data:
-                node_a = (match["feed_a"], match["track_a"])
-                node_b = (match["feed_b"], match["track_b"])
-                sim = match.get("similarity", 1.0)
-
-                # Check if we have occurrences for both tracks
+            
+            # Sort matches by similarity descending to resolve greedily
+            matches_data = sorted(matches_data, key=lambda x: x.get("similarity", 0.0), reverse=True)
+            
+            for m in matches_data:
+                node_a = (m["feed_a"], int(m["track_a"]))
+                node_b = (m["feed_b"], int(m["track_b"]))
                 if node_a in tracks_map and node_b in tracks_map:
-                    union(node_a, node_b)
-                    node_similarity[node_a] = max(node_similarity.get(node_a, 0.0), sim)
-                    node_similarity[node_b] = max(node_similarity.get(node_b, 0.0), sim)
+                    if node_a not in matched_nodes and node_b not in matched_nodes:
+                        matched_nodes.add(node_a)
+                        matched_nodes.add(node_b)
+                        matched_groups.append((node_a, node_b))
         except Exception as e:
             log_event("WARNING", f"Failed to load matches file: {e}", "yellow")
+    else:
+        log_event(
+            "WARNING",
+            f"Matches file not found (path: {resolved_matches_path or 'output.json'}). "
+            "All tracks will be treated as local tracks.",
+            "yellow",
+        )
 
-    # Update occurrences with their matched similarity
-    for node, sim in node_similarity.items():
-        if node in tracks_map:
-            for occ in tracks_map[node]:
-                occ["similarity"] = sim
+    # Assign global_id string → list of (feed_name, track_id)
+    global_id_map: dict[str, list[tuple[str, int]]] = {}
+    
+    # 1. Assign global IDs to Resolved Matched Groups first
+    idx = 1
+    # Sort matched groups by first node name, then track ID to ensure deterministic order
+    for node_a, node_b in sorted(matched_groups, key=lambda x: (x[0][0], x[0][1])):
+        global_id_map[f"{idx:03d}"] = [node_a, node_b]
+        idx += 1
 
-    # Group tracks by parent root
-    groups = defaultdict(list)
-    for node in tracks_map.keys():
-        root = find(node)
-        groups[root].append(node)
-
-    # Convert to data mapping: global_id -> list of occurrences
-    data = {}
-    for idx, (root, nodes) in enumerate(groups.items(), 1):
-        global_id = f"{idx:03d}"
-        group_occs = []
-        for node in nodes:
-            group_occs.extend(tracks_map[node])
-        data[global_id] = group_occs
+    # 2. Then assign unique global IDs to remaining local tracks
+    for node in sorted(tracks_map.keys(), key=lambda x: (x[0], x[1])):
+        if node not in matched_nodes:
+            global_id_map[f"{idx:03d}"] = [node]
+            idx += 1
 
     if global_ids:
-        target_ids = set(str(gid) for gid in global_ids)
-        data = {gid: occs for gid, occs in data.items() if gid in target_ids}
-        log_event("FILTER", f"Filtered to only keep global IDs: {global_ids}", "green")
+        target_set = {f"{gid:03d}" for gid in global_ids}
+        global_id_map = {gid: nodes for gid, nodes in global_id_map.items() if gid in target_set}
+        log_event("FILTER", f"Filtered to global IDs: {global_ids}", "green")
 
-    raw_det_count = sum(len(occs) for occs in data.values())
-    stats["Raw Detections"] = raw_det_count
-    stats["Unique IDs"] = len(data)
+    stats["Unique Tracks"] = sum(len(nodes) for nodes in global_id_map.values())
+
+    # ── Sample detections from each compressed track ──────────────────────────
+    # by_video: feed_name → list of detection dicts (enriched with global_id)
+    by_video: dict[str, list[dict]] = defaultdict(list)
+
+    for global_id, nodes in global_id_map.items():
+        for (feed_name, track_id) in nodes:
+            comp_track = tracks_map[(feed_name, track_id)]
+            dets = sample_track_detections(comp_track, min_time_gap_seconds)
+            stats["Sampled Frames"] += len(dets)
+            for det in dets:
+                det["global_id"] = global_id
+                by_video[feed_name].append(det)
+
     log_event(
         "SYSTEM",
-        f"Loaded [green]{len(data)}[/green] identities with [green]{raw_det_count}[/green] raw occurrences.",
+        f"Sampled [green]{stats['Sampled Frames']}[/green] frames from "
+        f"[green]{stats['Unique Tracks']}[/green] tracks across "
+        f"[cyan]{len(by_video)}[/cyan] videos.",
         "cyan",
     )
 
-    data = should_keep_detections(
-        data,
-        min_time_gap_seconds=min_time_gap_seconds,
-    )
-
-    filtered_det_count = sum(len(occs) for occs in data.values())
-    stats["Filtered Detections"] = filtered_det_count
-    log_event(
-        "FILTER",
-        f"Filtered occurrences to [green]{filtered_det_count}[/green] (gap threshold: [green]{min_time_gap_seconds}s[/green]).",
-        "green",
-    )
-
-    # Count IDs with crops in both V1 and V2
-    both_videos_ids = []
-    all_vids = {det["feed_name"] for occurrences in data.values() for det in occurrences}
-    all_vids_sorted = sorted(list(all_vids))
-    if len(all_vids_sorted) >= 2:
-        v1 = all_vids_sorted[0]
-        v2 = all_vids_sorted[1]
-        both_count = 0
-        for global_id, occurrences in data.items():
-            has_v1 = any(det["feed_name"] == v1 for det in occurrences)
-            has_v2 = any(det["feed_name"] == v2 for det in occurrences)
-            if has_v1 and has_v2:
-                both_count += 1
-                both_videos_ids.append(global_id)
-        stats["IDs in V1 & V2"] = both_count
-    else:
-        both_videos_ids = []
-
-    by_video: dict[str, list[dict]] = defaultdict(list)
-
-    for global_id, detections in data.items():
-        for det in detections:
-            det["global_id"] = global_id
-            by_video[det["feed_name"]].append(det)
-
     total_videos = len(by_video)
-    log_event("SYSTEM", f"Grouped into [cyan]{total_videos}[/cyan] videos to process.", "cyan")
+    if total_videos == 0:
+        log_event("WARNING", "No videos to process.", "yellow")
+        return
 
-    # Set up progress bars
+    # ── Progress / layout helpers ─────────────────────────────────────────────
     overall_progress = Progress(
         TextColumn("[bold cyan]{task.description}"),
         BarColumn(bar_width=30, style="grey37", complete_style="cyan"),
@@ -297,68 +303,59 @@ def extract_reid_crops(
     )
 
     videos_task = overall_progress.add_task("Overall Progress", total=total_videos)
-    video_task = video_progress.add_task("Active Video Detections", total=0, visible=False)
+    video_task  = video_progress.add_task("Active Video Detections", total=0, visible=False)
 
     config_info = {
-        "JSON Path": str(json_path),
-        "Video Dir": str(video_dir),
-        "Output Dir": str(output_dir),
-        "Min Time Gap": f"{min_time_gap_seconds}s",
+        "JSON Path":   str(json_path),
+        "Video Dir":   str(video_dir),
+        "Output Dir":  str(output_dir),
+        "Time Gap":    f"{min_time_gap_seconds}s",
     }
 
-    current_video_name = "None"
+    current_video_name   = "None"
     current_video_status = "Waiting..."
 
     def generate_layout() -> Layout:
         layout = Layout()
         layout.split_column(
             Layout(name="header", size=3),
-            Layout(name="body", ratio=1),
+            Layout(name="body",   ratio=1),
             Layout(name="footer", size=3),
         )
-
         layout["body"].split_row(
-            Layout(name="left", ratio=2),
+            Layout(name="left",  ratio=2),
             Layout(name="right", ratio=3),
         )
 
-        # Header
         header_text = Text(
-            "DMT ReID Crop Extractor & Verifier",
+            "DMT ReID Crop Extractor",
             style="bold white on magenta",
             justify="center",
         )
         layout["header"].update(Panel(header_text, border_style="magenta", box=box.ROUNDED))
 
-        # Left Panel (Settings & Stats)
         left_table = Table.grid(padding=1, expand=True)
-
         cfg_tbl = Table(title="[bold cyan]Configuration[/bold cyan]", box=box.ROUNDED, expand=True)
         cfg_tbl.add_column("Parameter", style="cyan")
         cfg_tbl.add_column("Value", style="green")
         for k, v in config_info.items():
             cfg_tbl.add_row(k, str(v))
 
-        stats_tbl = Table(
-            title="[bold yellow]Statistics[/bold yellow]", box=box.ROUNDED, expand=True
-        )
+        stats_tbl = Table(title="[bold yellow]Statistics[/bold yellow]", box=box.ROUNDED, expand=True)
         stats_tbl.add_column("Metric", style="yellow")
-        stats_tbl.add_column("Count", style="white", justify="right")
+        stats_tbl.add_column("Count",  style="white", justify="right")
         for k, v in stats.items():
             stats_tbl.add_row(k, f"[bold]{v}[/bold]" if v > 0 else str(v))
 
         left_table.add_row(cfg_tbl)
         left_table.add_row(stats_tbl)
-
         layout["left"].update(Panel(left_table, border_style="cyan", box=box.ROUNDED))
 
-        # Right Panel (Progress & Events)
         right_layout = Layout()
         right_layout.split_column(
             Layout(name="progress_section", size=9),
-            Layout(name="events_section", ratio=1),
+            Layout(name="events_section",   ratio=1),
         )
-
         prog_table = Table.grid(padding=1, expand=True)
         prog_table.add_row(
             Text.assemble(("Active Video: ", "bold cyan"), (current_video_name, "bold white"))
@@ -370,46 +367,33 @@ def extract_reid_crops(
         prog_table.add_row(video_progress)
 
         right_layout["progress_section"].update(
-            Panel(
-                prog_table,
-                title="[bold yellow]Extraction Progress[/bold yellow]",
-                border_style="yellow",
-                box=box.ROUNDED,
-            )
+            Panel(prog_table, title="[bold yellow]Extraction Progress[/bold yellow]",
+                  border_style="yellow", box=box.ROUNDED)
         )
 
-        # Events (Activity Log)
         events_text = Text()
         for ev in activity_log[-12:]:
             events_text.append(Text.from_markup(ev + "\n"))
-
         right_layout["events_section"].update(
-            Panel(
-                events_text,
-                title="[bold red]Activity Log[/bold red]",
-                border_style="red",
-                box=box.ROUNDED,
-            )
+            Panel(events_text, title="[bold red]Activity Log[/bold red]",
+                  border_style="red", box=box.ROUNDED)
         )
-
         layout["body"]["right"].update(right_layout)
 
-        # Footer
         footer_text = Text(
-            "Processing crops from multi-camera tracking outputs. Press Ctrl+C to abort.",
-            style="italic dim white",
-            justify="center",
+            "Extracting crops from compressed tracks. Press Ctrl+C to abort.",
+            style="italic dim white", justify="center",
         )
         layout["footer"].update(Panel(footer_text, border_style="grey37", box=box.ROUNDED))
-
         return layout
 
     start_time = time.time()
 
     def process_loop(live_instance=None):
         nonlocal current_video_name, current_video_status
+
         for video_idx, (video_name, detections) in enumerate(by_video.items(), 1):
-            current_video_name = video_name
+            current_video_name   = video_name
             current_video_status = f"Initializing {video_name}"
             if live_instance:
                 live_instance.update(generate_layout())
@@ -417,16 +401,16 @@ def extract_reid_crops(
             video_path = video_dir / video_name
             log_event(
                 "VIDEO",
-                f"Processing [bold]{video_name}[/bold] ({len(detections)} occurrences)",
+                f"Processing [bold]{video_name}[/bold] ({len(detections)} sampled frames)",
                 "magenta",
             )
             if live_instance:
                 live_instance.update(generate_layout())
 
             if not video_path.exists():
-                fallback_path = workspace_root / "reid" / video_dir.name / video_name
-                if fallback_path.exists():
-                    video_path = fallback_path
+                fallback = workspace_root / "reid" / video_dir.name / video_name
+                if fallback.exists():
+                    video_path = fallback
                 else:
                     log_event("WARNING", f"Missing video file: {video_path}", "yellow")
                     stats["Missing Videos"] += 1
@@ -436,9 +420,8 @@ def extract_reid_crops(
                     continue
 
             cap = cv2.VideoCapture(str(video_path))
-
             if not cap.isOpened():
-                log_event("WARNING", f"Could not open video file: {video_path}", "yellow")
+                log_event("WARNING", f"Could not open video: {video_path}", "yellow")
                 stats["Missing Videos"] += 1
                 overall_progress.update(videos_task, advance=1)
                 if live_instance:
@@ -483,51 +466,42 @@ def extract_reid_crops(
                     continue
 
                 x1, y1, x2, y2 = map(int, det["bbox"])
-                h, w = frame.shape[:2]
+                frame_h, frame_w = frame.shape[:2]
+                x1 = max(0, min(x1, frame_w - 1))
+                x2 = max(0, min(x2, frame_w))
+                y1 = max(0, min(y1, frame_h - 1))
+                y2 = max(0, min(y2, frame_h))
 
-                x1 = max(0, min(x1, w - 1))
-                x2 = max(0, min(x2, w))
-                y1 = max(0, min(y1, h - 1))
-                y2 = max(0, min(y2, h))
+                bbox_w = x2 - x1
+                bbox_h = y2 - y1
 
-                if x2 <= x1 or y2 <= y1:
+                if bbox_w <= 0 or bbox_h <= 0:
                     video_progress.update(video_task, advance=1)
                     if live_instance:
                         live_instance.update(generate_layout())
                     continue
 
-                crop = frame[y1:y2, x1:x2]
+                crop = frame[y1:y1 + bbox_h, x1:x1 + bbox_w]
 
-                global_id = str(det["global_id"])
-                local_track_id = det.get("local_track_id", -1)
+                global_id    = str(det["global_id"])
+                track_id     = det["track_id"]
+                timestamp    = det["timestamp_seconds"]
 
                 person_dir = output_dir / global_id
                 person_dir.mkdir(parents=True, exist_ok=True)
 
-                stem = Path(video_name).stem
-                timestamp = det.get("timestamp_seconds", 0.0)
-                similarity = det.get("similarity", 1.0)
-
+                stem     = Path(video_name).stem
                 out_name = (
                     f"{stem}"
                     f"_f{frame_idx:06d}"
-                    f"_t{local_track_id}"
-                    f"_s{timestamp:.2f}"
-                    f"_sim{similarity:.4f}.jpg"
+                    f"_t{track_id}"
+                    f"_s{timestamp:.2f}.jpg"
                 )
 
-                cv2.imwrite(
-                    str(person_dir / out_name),
-                    crop,
-                )
-
+                cv2.imwrite(str(person_dir / out_name), crop)
                 stats["Extracted Crops"] += 1
 
-                # Avoid log spam for crops, log every 10 crops
-                if (
-                    stats["Extracted Crops"] % 10 == 0
-                    or stats["Extracted Crops"] == filtered_det_count
-                ):
+                if stats["Extracted Crops"] % 10 == 0:
                     log_event(
                         "CROP",
                         f"Saved crop for ID {global_id} (Total: {stats['Extracted Crops']})",
@@ -560,11 +534,10 @@ def extract_reid_crops(
 
     summary_table = Table(box=box.HEAVY, expand=False)
     summary_table.add_column("Metric", style="cyan")
-    summary_table.add_column("Value", style="green")
+    summary_table.add_column("Value",  style="green")
     summary_table.add_row("Total Processing Time", f"{elapsed:.2f} seconds")
     for k, v in stats.items():
         summary_table.add_row(k, str(v))
-    summary_table.add_row("Global IDs in V1 & V2", str(both_videos_ids))
 
     console.print("\n")
     console.print(
@@ -576,92 +549,66 @@ def extract_reid_crops(
         )
     )
 
-    return both_videos_ids
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Verify ReID detections and extract person crops from source videos."
+        description="Extract bounding-box crops from compressed-track registry JSON."
     )
     parser.add_argument(
-        "--json_path",
-        "-j",
-        type=str,
-        required=True,
-        help="Path to the JSON file containing tracking occurrences.",
+        "--json_path", "-j", type=str, required=True,
+        help="Path to the registry JSON file produced by run_reid_pipeline.py.",
     )
     parser.add_argument(
-        "--matches_path",
-        "-m",
-        type=str,
-        default=None,
-        help="Path to the JSON file containing cross-camera matches.",
+        "--matches_path", "-m", type=str, default=None,
+        help="Path to a cross-camera match JSON to group tracks into global identities.",
     )
     parser.add_argument(
-        "--video_dir",
-        "-v",
-        type=str,
-        required=True,
+        "--video_dir", "-v", type=str, required=True,
         help="Directory containing the input video files.",
     )
     parser.add_argument(
-        "--output_dir",
-        "-o",
-        type=str,
-        required=True,
+        "--output_dir", "-o", type=str, required=True,
         help="Directory to save the extracted crops.",
     )
     parser.add_argument(
-        "--min_time_gap",
-        "-t",
-        type=float,
-        default=MIN_TIME_GAP_SECONDS,
-        help="Minimum time gap in seconds between kept detections of the same identity.",
+        "--min_time_gap", "-t", type=float, default=MIN_TIME_GAP_SECONDS,
+        help="Minimum time gap in seconds between sampled frames per track (default: 3 s).",
     )
     parser.add_argument(
-        "--global_ids",
-        type=int,
-        nargs="+",
-        default=None,
-        help="List of global IDs to produce crops for (default: all IDs).",
+        "--global_ids", type=int, nargs="+", default=None,
+        help="Restrict extraction to these global IDs (default: all).",
     )
     parser.add_argument(
-        "--headless",
-        action="store_true",
-        help="Enable headless mode (disable fullscreen Live TUI, print plain text logs).",
+        "--headless", action="store_true",
+        help="Disable the fullscreen Live TUI; print plain-text logs instead.",
     )
 
     args = parser.parse_args()
 
-    # Resolve paths relative to workspace root if not found in current directory
-    script_dir = Path(__file__).resolve().parent
-
     json_path = Path(args.json_path)
     if not json_path.exists():
-        fallback_json = workspace_root / args.json_path
-        if fallback_json.exists():
-            json_path = fallback_json
+        fallback = workspace_root / args.json_path
+        if fallback.exists():
+            json_path = fallback
 
     matches_path = None
     if args.matches_path:
         matches_path = Path(args.matches_path)
         if not matches_path.exists():
-            fallback_matches = workspace_root / args.matches_path
-            if fallback_matches.exists():
-                matches_path = fallback_matches
+            fallback = workspace_root / args.matches_path
+            if fallback.exists():
+                matches_path = fallback
 
     video_dir = Path(args.video_dir)
     if not video_dir.exists():
-        fallback_video_dir = workspace_root / args.video_dir
-        if fallback_video_dir.exists():
-            video_dir = fallback_video_dir
-
-    output_dir = Path(args.output_dir)
+        fallback = workspace_root / args.video_dir
+        if fallback.exists():
+            video_dir = fallback
 
     extract_reid_crops(
         json_path=str(json_path),
         video_dir=str(video_dir),
-        output_dir=str(output_dir),
+        output_dir=str(args.output_dir),
         min_time_gap_seconds=args.min_time_gap,
         headless=args.headless,
         global_ids=args.global_ids,

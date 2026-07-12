@@ -2,9 +2,12 @@
 """
 Multi-camera track matching script.
 
-Given a JSON summary and NPZ embeddings produced by the ReID pipeline,
+Given a JSON registry and NPZ embeddings produced by the ReID pipeline,
 computes cross-camera cosine similarity between tracks from different feeds
 and produces a ranked list of candidate re-identification matches.
+
+JSON format (per feed):
+  {feed_name: [{track_id, compressed_track}, ...]}
 
 NPZ key format (per feed, per track):
   {feed}_{embedding_type}_{track_id}
@@ -14,14 +17,14 @@ Where embedding_type is one of:
   - smooth — per-frame tracker moving-average embeddings
 
 Usage:
-    python scripts/match_multicamera.py --json temp_test.json --npz temp_test.npz [options]
+    python scripts/match_multicamera.py --json temp.json --npz temp.npz [options]
 """
 
 import argparse
 import json
 import sys
 from itertools import product
-from typing import Dict, List, NamedTuple
+from typing import Dict, List, NamedTuple, Any
 
 import numpy as np
 
@@ -35,8 +38,8 @@ class TrackEntry(NamedTuple):
     feed: str
     track_id: int
     class_label: str
-    n_occurrences: int
-    embedding: np.ndarray  # shape (D,) — aggregated prototype
+    n_frames: int
+    embedding: np.ndarray[Any, Any]  # shape (D,) — aggregated prototype
 
 
 class MatchResult(NamedTuple):
@@ -54,12 +57,12 @@ class MatchResult(NamedTuple):
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def l2_normalize(v: np.ndarray) -> np.ndarray:
+def l2_normalize(v: np.ndarray[Any, Any]) -> np.ndarray[Any, Any]:
     norm = np.linalg.norm(v)
     return v / (norm + 1e-8)
 
 
-def aggregate_embeddings(occ_embeddings: np.ndarray, mode: str) -> np.ndarray:
+def aggregate_embeddings(occ_embeddings: np.ndarray[Any, Any], mode: str) -> np.ndarray[Any, Any]:
     """Reduce a (N, D) matrix of embeddings to a single prototype vector.
 
     Args:
@@ -80,7 +83,7 @@ def aggregate_embeddings(occ_embeddings: np.ndarray, mode: str) -> np.ndarray:
     return l2_normalize(proto.astype(np.float32))
 
 
-def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
+def cosine_similarity(a: np.ndarray[Any, Any], b: np.ndarray[Any, Any]) -> float:
     return float(np.dot(l2_normalize(a), l2_normalize(b)))
 
 
@@ -109,7 +112,7 @@ def load_tracks(
         Dict mapping feed_name -> list of TrackEntry.
     """
     with open(json_path) as f:
-        registry: Dict[str, List[dict]] = json.load(f)
+        registry: Dict[str, List[Dict[str, Any]]] = json.load(f)
 
     npz = np.load(npz_path)
 
@@ -119,11 +122,11 @@ def load_tracks(
         entries: List[TrackEntry] = []
         for track in tracks:
             track_id = track["track_id"]
-            occs = track["occurrences"]
-            if not occs:
+            comp_track = track.get("compressed_track")
+            if not comp_track:
                 continue
 
-            class_label = occs[0]["class_label"]
+            class_label = comp_track["class"]
             if class_filter and class_label not in class_filter:
                 continue
 
@@ -141,12 +144,14 @@ def load_tracks(
                 embeddings = embeddings[np.newaxis, :]
 
             prototype = aggregate_embeddings(embeddings, aggregation)
+            n_frames = len(comp_track["time_model"]["frames"])
+
             entries.append(
                 TrackEntry(
                     feed=feed_name,
                     track_id=track_id,
                     class_label=class_label,
-                    n_occurrences=len(occs),
+                    n_frames=n_frames,
                     embedding=prototype,
                 )
             )
